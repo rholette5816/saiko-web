@@ -25,20 +25,20 @@ export function LocationSection() {
   }
 
   return (
-    <section className="py-16 md:py-24 bg-white">
+    <section className="py-16 md:py-24 bg-[#ebe9e6]">
       <div className="container">
         {/* Section Header */}
         <div className="text-center mb-12 md:mb-16">
-          <h2 className="font-poppins font-bold text-3xl md:text-4xl text-foreground mb-4">
+          <h2 className="font-poppins font-bold text-3xl md:text-4xl text-[#0d0f13] mb-4 uppercase tracking-wide">
             Visit Us Today
           </h2>
-          <div className="h-1 w-24 bg-gradient-to-r from-yellow-400 via-orange-500 to-orange-600 rounded-full mx-auto" />
+          <div className="h-1 w-24 bg-gradient-to-r from-[#c08643] to-[#ac312d] rounded-full mx-auto" />
         </div>
 
         {/* Single Location */}
         <div className="max-w-2xl mx-auto mb-12">
-          <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-xl p-8 border border-orange-100 hover:shadow-lg transition-shadow duration-300">
-            <h3 className="font-poppins font-bold text-xl text-foreground mb-6">
+          <div className="bg-white rounded-xl p-8 border border-[#c08643]/20 hover:shadow-lg transition-shadow duration-300">
+            <h3 className="font-poppins font-bold text-xl text-[#0d0f13] mb-6 uppercase tracking-wide">
               Saiko Ramen & Sushi
             </h3>
 
@@ -47,11 +47,11 @@ export function LocationSection() {
               <div className="flex items-start gap-3">
                 <span className="text-2xl flex-shrink-0">📍</span>
                 <div>
-                  <p className="text-sm text-muted-foreground">Address</p>
-                  <p className="font-medium text-foreground">
+                  <p className="text-sm text-[#705d48]">Address</p>
+                  <p className="font-medium text-[#0d0f13]">
                     Circumferential Road 1, Pulo Maestra Vita, Oton, Iloilo
                   </p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-sm text-[#705d48] mt-0.5">
                     Between Shell and Petron Gasoline Station
                   </p>
                 </div>
@@ -61,10 +61,10 @@ export function LocationSection() {
               <div className="flex items-start gap-3">
                 <span className="text-2xl flex-shrink-0">📞</span>
                 <div>
-                  <p className="text-sm text-muted-foreground">Phone</p>
+                  <p className="text-sm text-[#705d48]">Phone</p>
                   <a
                     href="tel:09178658587"
-                    className="font-medium text-orange-600 hover:text-orange-700"
+                    className="font-medium text-[#ac312d] hover:text-[#8f2825]"
                   >
                     0917-865-8587
                   </a>
@@ -75,26 +75,26 @@ export function LocationSection() {
               <div className="flex items-start gap-3">
                 <span className="text-2xl flex-shrink-0">🕐</span>
                 <div>
-                  <p className="text-sm text-muted-foreground">Hours</p>
-                  <p className="font-medium text-foreground">Mon – Thu: 10AM – 9PM</p>
-                  <p className="font-medium text-foreground">Fri – Sun: 10AM – 10PM</p>
+                  <p className="text-sm text-[#705d48]">Hours</p>
+                  <p className="font-medium text-[#0d0f13]">Mon – Thu: 10AM – 9PM</p>
+                  <p className="font-medium text-[#0d0f13]">Fri – Sun: 10AM – 10PM</p>
                 </div>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 mt-6 pt-6 border-t border-orange-200">
+            <div className="flex gap-3 mt-6 pt-6 border-t border-[#e5e2de]">
               <a
                 href="https://maps.google.com/?q=Circumferential+Road+1+Pulo+Maestra+Vita+Oton+Iloilo"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 py-2 px-4 bg-white border border-orange-300 text-orange-600 font-medium rounded-lg hover:bg-orange-50 transition-colors text-sm text-center"
+                className="flex-1 py-2 px-4 bg-white border border-[#0d0f13] text-[#0d0f13] font-medium rounded-lg hover:bg-[#ebe9e6] transition-colors text-sm text-center uppercase tracking-wide"
               >
                 Get Directions
               </a>
               <a
                 href="tel:09178658587"
-                className="flex-1 py-2 px-4 bg-gradient-to-r from-yellow-400 via-orange-500 to-orange-600 text-white font-medium rounded-lg hover:shadow-md transition-shadow text-sm text-center"
+                className="flex-1 py-2 px-4 bg-[#ac312d] text-white font-medium rounded-lg hover:bg-[#8f2825] hover:shadow-md transition-all text-sm text-center uppercase tracking-wide"
               >
                 Call Now
               </a>
@@ -117,7 +117,7 @@ export function LocationSection() {
         </div>
 
         {/* Contact Form Section */}
-        <div className="bg-gradient-to-r from-yellow-400 via-orange-500 to-orange-600 rounded-2xl p-8 md:p-12 text-white">
+        <div className="bg-[#ac312d] rounded-2xl p-8 md:p-12 text-white">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Left: Info */}
             <div>
