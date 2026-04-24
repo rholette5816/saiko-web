@@ -17,13 +17,13 @@ export function FeaturedSection() {
       <div className="container">
         <div className="text-center mb-12 md:mb-16">
           <p className="text-xs md:text-sm uppercase tracking-widest text-[#ac312d] font-bold mb-2">
-            Must-Try Dishes
+            Kahit Isang Bite
           </p>
           <h2 className="font-poppins font-bold text-3xl md:text-4xl text-[#0d0f13] mb-4 uppercase tracking-wide">
             Featured
           </h2>
           <p className="text-lg text-[#705d48] max-w-2xl mx-auto mb-6">
-            Our chef's picks that regulars keep coming back for. Start here, then explore the full menu.
+            The four dishes our regulars order every single time. Try them once and you'll understand why.
           </p>
           <div className="h-1 w-24 bg-gradient-to-r from-[#e88627] via-[#c08643] to-[#ac312d] rounded-full mx-auto" />
         </div>

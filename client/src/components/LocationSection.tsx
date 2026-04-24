@@ -80,8 +80,8 @@ export function LocationSection() {
                 <span className="text-2xl flex-shrink-0">🕐</span>
                 <div>
                   <p className="text-sm text-[#705d48]">Hours</p>
-                  <p className="font-medium text-[#0d0f13]">Mon – Thu: 10AM – 9PM</p>
-                  <p className="font-medium text-[#0d0f13]">Fri – Sun: 10AM – 10PM</p>
+                  <p className="font-medium text-[#0d0f13]">Mon to Thu: 10AM to 9PM</p>
+                  <p className="font-medium text-[#0d0f13]">Fri to Sun: 10AM to 10PM</p>
                 </div>
               </div>
             </div>
@@ -137,7 +137,7 @@ export function LocationSection() {
                 Get in Touch
               </h3>
               <p className="opacity-90 mb-6">
-                Have questions or reservations? We'd love to hear from you.
+                Questions, reservations, or just want to say hi? Send us a PM. We reply within the hour most days.
               </p>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">

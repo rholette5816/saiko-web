@@ -6,7 +6,6 @@ import { Footer } from "@/components/Footer";
 import { HeroSection } from "@/components/HeroSection";
 import { LocationSection } from "@/components/LocationSection";
 import { MobileActionBar } from "@/components/MobileActionBar";
-import { NewsletterBanner } from "@/components/NewsletterBanner";
 import { Reveal } from "@/components/Reveal";
 import { ReviewsSection } from "@/components/ReviewsSection";
 import { TeamSection } from "@/components/TeamSection";
@@ -28,7 +27,6 @@ export default function Home() {
       <section id="about"><Reveal><AboutSection /></Reveal></section>
       <Reveal><FeaturedSection /></Reveal>
       <Reveal><ReviewsSection /></Reveal>
-      <Reveal><NewsletterBanner /></Reveal>
       <Reveal><TeamSection /></Reveal>
       <section id="location"><Reveal><LocationSection /></Reveal></section>
 

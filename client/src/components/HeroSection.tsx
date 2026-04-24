@@ -39,11 +39,10 @@ export function HeroSection() {
               </span>
             </h2>
             <p className="text-base md:text-lg text-[#705d48] max-w-md">
-              Authentic Japanese cuisine crafted with quality ingredients, fresh
-              flavors, and a memorable dining experience.
+              Home-made ramen noodles, sushi rolled fresh, and a bowl that makes a rainy Iloilo afternoon worth it.
             </p>
-            <p className="text-sm font-medium text-[#ac312d]">
-              Starts at ₱189 · Sulit Ramen for Every Barkada
+            <p className="text-sm font-medium text-[#ac312d] uppercase tracking-wide">
+              Real Japanese comfort food. Made fresh every day in Oton.
             </p>
           </div>
 

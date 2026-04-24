@@ -7,11 +7,10 @@ export function TeamSection() {
         {/* Section Header */}
         <div className="text-center mb-12 md:mb-16">
           <h2 className="font-poppins font-bold text-3xl md:text-4xl text-[#0d0f13] mb-4 uppercase tracking-wide">
-            Meet Our Team
+            The People Behind The Bowl
           </h2>
           <p className="text-lg text-[#705d48] max-w-2xl mx-auto">
-            Behind every great dish is a passionate team dedicated to quality,
-            freshness, and creating a welcoming experience for every guest.
+            Chefs who've trained for this. A service team that remembers your order the second visit. That's the Saiko family.
           </p>
           <div className="h-1 w-24 bg-gradient-to-r from-[#c08643] to-[#ac312d] rounded-full mx-auto mt-6" />
         </div>
@@ -33,18 +32,18 @@ export function TeamSection() {
           {[
             {
               icon: "👨‍🍳",
-              title: "Expert Chefs",
-              description: "Our chefs bring years of experience in authentic Japanese cuisine, ensuring every dish meets our high standards.",
+              title: "Chefs Who Trained For This",
+              description: "Every ramen chef on our line has spent years mastering broth, noodle, and knife. No shortcuts. No frozen shipments.",
             },
             {
               icon: "🤝",
-              title: "Dedicated Staff",
-              description: "From kitchen to table, our team is committed to providing exceptional service and creating memorable experiences.",
+              title: "A Service Team That Remembers",
+              description: "Second visit, we remember your usual. Third visit, we know your order before you sit down.",
             },
             {
               icon: "❤️",
-              title: "Passionate About Quality",
-              description: "We care deeply about our craft, our ingredients, and most importantly, the satisfaction of our customers.",
+              title: "Obsessed With The Bowl",
+              description: "If the broth isn't perfect, it doesn't go out. If a roll isn't tight, it gets rerolled. That's the standard.",
             },
           ].map((value, index) => (
             <div
@@ -59,22 +58,6 @@ export function TeamSection() {
               <p className="text-[#705d48] leading-relaxed">{value.description}</p>
             </div>
           ))}
-        </div>
-
-        {/* Hiring Banner */}
-        <div className="mt-16 md:mt-20 bg-[#0d0f13] rounded-xl p-8 md:p-12 text-center">
-          <h3 className="font-poppins font-bold text-2xl text-white mb-3 uppercase tracking-wide">
-            Join Our Team
-          </h3>
-          <p className="text-[#ebe9e6] mb-6 max-w-2xl mx-auto">
-            We're always looking for passionate individuals who share our commitment to quality and customer service. If you'd like to be part of the Saiko family, we'd love to hear from you!
-          </p>
-          <a
-            href="mailto:alphrickfoodventuresinc@gmail.com"
-            className="inline-block px-8 py-3 bg-[#ac312d] text-white font-poppins font-bold rounded-lg hover:bg-[#8f2825] hover:shadow-lg transition-all duration-200 uppercase tracking-wide"
-          >
-            Get in Touch
-          </a>
         </div>
       </div>
     </section>

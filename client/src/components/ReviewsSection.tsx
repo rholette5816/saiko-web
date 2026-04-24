@@ -9,7 +9,7 @@ export function ReviewsSection() {
         {/* Section Header */}
         <div className="mb-12 md:mb-16">
           <h2 className="font-poppins font-bold text-3xl md:text-4xl text-[#0d0f13] mb-4 uppercase tracking-wide">
-            Loved by Our Community
+            Sabi Ng Mga Suki
           </h2>
           <div className="h-1 w-24 bg-gradient-to-r from-[#c08643] to-[#ac312d] rounded-full" />
         </div>
@@ -34,7 +34,7 @@ export function ReviewsSection() {
               </div>
             </div>
             <p className="text-[#0d0f13] font-medium">
-              Consistently excellent ratings from our valued customers
+              The rating our regulars keep earning us, one bowl at a time.
             </p>
           </div>
 

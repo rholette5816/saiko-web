@@ -1,7 +1,7 @@
 /*
   Saiko operating hours (Asia/Manila, GMT+8).
-  Mon–Thu: 10:00–21:00
-  Fri–Sun: 10:00–22:00
+  Mon to Thu: 10:00 to 21:00
+  Fri to Sun: 10:00 to 22:00
 */
 
 export type OpenStatus =

@@ -27,13 +27,13 @@ export function DeliverySection() {
       <div className="container">
         <div className="text-center mb-6 md:mb-8">
           <div className="inline-flex items-center gap-2 text-[#ac312d] font-poppins font-bold uppercase tracking-wide text-sm mb-2">
-            <Bike size={18} /> Saiko Sa Inyong Bahay
+            <Bike size={18} /> Hatid Sa Inyo
           </div>
           <h2 className="font-poppins font-bold text-2xl md:text-3xl text-[#0d0f13] uppercase tracking-wide">
             Order Delivery
           </h2>
           <p className="text-[#705d48] mt-2 text-sm md:text-base">
-            Too sulit to pass up. Get Saiko delivered hot to your door.
+            Kahit nasa bahay, kasing-init at kasing-sarap. Order via Grab or Panda and we'll handle the rest.
           </p>
         </div>
 

@@ -21,7 +21,10 @@ export function AboutSection() {
                 <span className="text-2xl">🎯</span> Our Mission
               </h3>
               <p className="text-[#705d48] leading-relaxed">
-                To serve high-quality ramen and sushi that are accessible, satisfying, and made with care, while creating a space where every customer feels welcome and valued. We believe great food doesn't have to be complicated — just fresh ingredients, consistent quality, and genuine hospitality.
+                We make ramen the way it should be made. Noodles made in-house the same day you eat them. Broth simmered for hours. Sushi rolled to order, never sitting around.
+              </p>
+              <p className="text-[#705d48] leading-relaxed mt-3">
+                No shortcuts. No frozen shipments. Just honest Japanese food at a price that still makes sense.
               </p>
             </div>
 
@@ -30,7 +33,7 @@ export function AboutSection() {
                 <span className="text-2xl">✨</span> Our Vision
               </h3>
               <p className="text-[#705d48] leading-relaxed">
-                To become a trusted local favorite — a place people remember not just for the taste, but for the experience. A brand that stands for cleanliness, consistency, and honest food that brings people together.
+                To be the spot your family already picked before you finished asking "saan tayo kakain?"
               </p>
             </div>
 
@@ -41,9 +44,9 @@ export function AboutSection() {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { icon: "🍱", label: "Quality" },
-                  { icon: "🌱", label: "Freshness" },
-                  { icon: "✨", label: "Cleanliness" },
-                  { icon: "🤝", label: "Care" },
+                  { icon: "🌸", label: "Authentic" },
+                  { icon: "🌱", label: "Fresh" },
+                  { icon: "🔪", label: "Craft" },
                 ].map((value) => (
                   <div
                     key={value.label}
@@ -74,10 +77,10 @@ export function AboutSection() {
           <div className="absolute inset-0 bg-gradient-to-br from-[#e88627]/10 via-transparent to-[#c08643]/10 pointer-events-none" />
           <div className="relative">
             <p className="font-display text-2xl md:text-3xl italic mb-3 text-[#f5a24b]">
-              "At Saiko, it's all about balance"
+              "Balance on every plate"
             </p>
             <p className="text-lg opacity-90">
-              Clean design, warm flavors, and food that speaks for itself.
+              Rich broth meets crisp sushi. Bold flavor meets clean presentation. That's Saiko.
             </p>
           </div>
         </div>

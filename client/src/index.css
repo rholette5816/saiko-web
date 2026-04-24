@@ -45,9 +45,9 @@
 :root {
   /* Saiko Brand Colors - sourced from official logo (orange bowl on cream) */
   /* Warmth scale (hero/feature backgrounds, inspired by logo) */
-  --saiko-orange: #e88627;    /* Logo orange — primary warmth */
+  --saiko-orange: #e88627;    /* Logo orange, primary warmth */
   --saiko-amber: #f5a24b;     /* Lighter warmth for gradients */
-  --saiko-gold: #c08643;      /* Broth Gold — accents, small text */
+  --saiko-gold: #c08643;      /* Broth Gold, accents, small text */
   /* Action (CTAs + alerts only, not large backgrounds) */
   --saiko-red: #ac312d;
   --saiko-red-hover: #8f2825;

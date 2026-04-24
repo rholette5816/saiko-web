@@ -28,10 +28,10 @@ export const menuData: MenuCategory[] = [
     name: "FEATURED",
     emoji: "⭐",
     items: [
-      { id: "f1", name: "Wagyu Teppan", price: 504, badge: "chefs-pick", image: featuredWagyuTeppan, description: "Premium wagyu seared teppan-style. Buttery, rich, unforgettable." },
-      { id: "f2", name: "Lava Rice", price: 359, badge: "spicy", image: featuredLavaRice, description: "Fiery house sauce over fluffy fried rice. Sulit at masulit." },
-      { id: "f3", name: "Uramaki Dragon Roll", price: 325, badge: "bestseller", image: featuredDragonRoll, description: "Our signature sushi roll. Bold flavors, Instagram-ready." },
-      { id: "f4", name: "Pork Gyoza", price: 157, badge: "new", image: featuredGyoza, description: "Pan-seared dumplings, crispy bottom, juicy inside. Perfect starter." },
+      { id: "f1", name: "Wagyu Teppan", price: 504, badge: "chefs-pick", image: featuredWagyuTeppan, description: "Premium wagyu cut, seared teppan-style. Buttery, rich, gone too soon." },
+      { id: "f2", name: "Lava Rice", price: 359, badge: "spicy", image: featuredLavaRice, description: "Our house chili sauce over hot fried rice. Anghang na gustong-gusto mo." },
+      { id: "f3", name: "Uramaki Dragon Roll", price: 325, badge: "bestseller", image: featuredDragonRoll, description: "Eight bites, five flavors, one signature roll. Your phone eats first." },
+      { id: "f4", name: "Pork Gyoza", price: 157, badge: "new", image: featuredGyoza, description: "Crispy bottom, juicy center, dipped in our house vinegar. Starter of champions." },
     ],
   },
   {

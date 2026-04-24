@@ -12,8 +12,7 @@ export function Footer() {
               <img src={logo} alt="Saiko Ramen & Sushi" className="h-16 w-auto" />
             </div>
             <p className="text-sm text-[#ebe9e6]/70 max-w-xs">
-              Authentic Japanese cuisine crafted with quality ingredients and
-              fresh flavors for a memorable dining experience.
+              Home-made ramen. Fresh sushi. Made in Oton, Iloilo since day one.
             </p>
             <p className="text-xs text-[#705d48] uppercase tracking-widest">
               Japanese Restaurant · Home Made Ramen Noodles
@@ -50,7 +49,7 @@ export function Footer() {
               </li>
               <li className="flex items-center gap-2">
                 <span>🕐</span>
-                <span>Mon–Thu 10AM–9PM | Fri–Sun 10AM–10PM</span>
+                <span>Mon to Thu 10AM to 9PM · Fri to Sun 10AM to 10PM</span>
               </li>
               <li className="flex items-center gap-2">
                 <span>📘</span>

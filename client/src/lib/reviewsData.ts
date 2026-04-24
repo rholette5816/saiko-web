@@ -29,7 +29,7 @@ export const reviewsData: Review[] = [
     author: "Angela Rodriguez",
     rating: 5,
     date: "3 weeks ago",
-    text: "Saiko is a gem! The tonkatsu ramen is outstanding—crispy, flavorful, and satisfying. The staff is incredibly friendly and helpful with menu recommendations. The restaurant is spotless and has such a nice vibe.",
+    text: "Saiko is a gem! The tonkatsu ramen is outstanding. Crispy, flavorful, and satisfying. The staff is incredibly friendly and helpful with menu recommendations. The restaurant is spotless and has such a nice vibe.",
     verified: true,
   },
   {
