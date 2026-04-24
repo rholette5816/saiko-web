@@ -1,9 +1,13 @@
+export type MenuBadge = "bestseller" | "chefs-pick" | "new" | "spicy";
+
 export interface MenuItem {
   id: string;
   name: string;
   price: number;
   description?: string;
   emoji?: string;
+  image?: string;       // TODO: populate with real dish photos in public/menu/
+  badge?: MenuBadge;
 }
 
 export interface MenuCategory {
@@ -19,10 +23,10 @@ export const menuData: MenuCategory[] = [
     name: "FEATURED / PROMO ITEMS",
     emoji: "🍜",
     items: [
-      { id: "f1", name: "Salted Egg Ramen", price: 300 },
-      { id: "f2", name: "Gyuniku (Spicy Beef Noodles)", price: 415 },
-      { id: "f3", name: "Cheesy Parmesan", price: 314 },
-      { id: "f4", name: "Honey Soy Lemon", price: 314 },
+      { id: "f1", name: "Salted Egg Ramen", price: 300, badge: "bestseller", description: "Rich salted-egg sauce over our home-made ramen noodles." },
+      { id: "f2", name: "Gyuniku (Spicy Beef Noodles)", price: 415, badge: "spicy", description: "Tender beef, bold spice, slurp-worthy broth." },
+      { id: "f3", name: "Cheesy Parmesan", price: 314, badge: "chefs-pick", description: "Creamy parmesan coating every strand." },
+      { id: "f4", name: "Honey Soy Lemon", price: 314, badge: "new", description: "Sweet-savory-bright. A fresh take on ramen." },
     ],
   },
   {

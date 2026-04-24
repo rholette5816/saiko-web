@@ -1,3 +1,5 @@
+import logo from "@/assets/logo.png";
+
 export function Footer() {
   return (
     <footer className="bg-[#0d0f13] text-white">
@@ -6,14 +8,8 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 mb-8">
           {/* Brand Section */}
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#ac312d] flex items-center justify-center">
-                <span className="text-[#c08643] text-xl font-bold">S</span>
-              </div>
-              <div>
-                <h3 className="font-poppins font-bold text-xl tracking-widest">SAIKO</h3>
-                <p className="font-display text-[#c08643] text-sm">Ramen & Sushi</p>
-              </div>
+            <div className="inline-flex items-center bg-white rounded-xl px-4 py-3 self-start shadow-lg">
+              <img src={logo} alt="Saiko Ramen & Sushi" className="h-16 w-auto" />
             </div>
             <p className="text-sm text-[#ebe9e6]/70 max-w-xs">
               Authentic Japanese cuisine crafted with quality ingredients and
@@ -73,6 +69,17 @@ export function Footer() {
                   className="hover:text-white transition-colors"
                 >
                   @saikoramenandsushi
+                </a>
+              </li>
+              <li className="flex items-center gap-2">
+                <span>💬</span>
+                <a
+                  href="https://m.me/saikoramenandsushi"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors"
+                >
+                  Message us on Messenger
                 </a>
               </li>
             </ul>

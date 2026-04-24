@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { OpenStatusBadge } from "./OpenStatusBadge";
 
 export function LocationSection() {
   const [formData, setFormData] = useState({ name: "", email: "", message: "" });
@@ -38,9 +39,12 @@ export function LocationSection() {
         {/* Single Location */}
         <div className="max-w-2xl mx-auto mb-12">
           <div className="bg-white rounded-xl p-8 border border-[#c08643]/20 hover:shadow-lg transition-shadow duration-300">
-            <h3 className="font-poppins font-bold text-xl text-[#0d0f13] mb-6 uppercase tracking-wide">
-              Saiko Ramen & Sushi
-            </h3>
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
+              <h3 className="font-poppins font-bold text-xl text-[#0d0f13] uppercase tracking-wide">
+                Saiko Ramen & Sushi
+              </h3>
+              <OpenStatusBadge />
+            </div>
 
             <div className="space-y-4">
               {/* Address */}
@@ -83,20 +87,28 @@ export function LocationSection() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 mt-6 pt-6 border-t border-[#e5e2de]">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 pt-6 border-t border-[#e5e2de]">
               <a
                 href="https://maps.google.com/?q=Circumferential+Road+1+Pulo+Maestra+Vita+Oton+Iloilo"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 py-2 px-4 bg-white border border-[#0d0f13] text-[#0d0f13] font-medium rounded-lg hover:bg-[#ebe9e6] transition-colors text-sm text-center uppercase tracking-wide"
+                className="py-2 px-4 bg-white border border-[#0d0f13] text-[#0d0f13] font-medium rounded-lg hover:bg-[#ebe9e6] transition-colors text-sm text-center uppercase tracking-wide"
               >
                 Get Directions
               </a>
               <a
                 href="tel:09178658587"
-                className="flex-1 py-2 px-4 bg-[#ac312d] text-white font-medium rounded-lg hover:bg-[#8f2825] hover:shadow-md transition-all text-sm text-center uppercase tracking-wide"
+                className="py-2 px-4 bg-[#0d0f13] text-white font-medium rounded-lg hover:bg-black transition-colors text-sm text-center uppercase tracking-wide"
               >
                 Call Now
+              </a>
+              <a
+                href="https://m.me/saikoramenandsushi?ref=book-a-table"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2 px-4 bg-[#ac312d] text-white font-medium rounded-lg hover:bg-[#8f2825] hover:shadow-md transition-all text-sm text-center uppercase tracking-wide"
+              >
+                Book a Table
               </a>
             </div>
           </div>
@@ -117,7 +129,7 @@ export function LocationSection() {
         </div>
 
         {/* Contact Form Section */}
-        <div className="bg-[#ac312d] rounded-2xl p-8 md:p-12 text-white">
+        <div className="bg-gradient-to-br from-[#e88627] via-[#c08643] to-[#ac312d] rounded-2xl p-8 md:p-12 text-white shadow-xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Left: Info */}
             <div>
@@ -199,7 +211,7 @@ export function LocationSection() {
                   <button
                     type="submit"
                     disabled={status === "sending"}
-                    className="w-full py-2 bg-white text-orange-600 font-bold rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-60"
+                    className="w-full py-2 bg-[#0d0f13] text-white font-bold rounded-lg hover:bg-black transition-colors disabled:opacity-60 uppercase tracking-wide"
                   >
                     {status === "sending" ? "Sending..." : "Send Message"}
                   </button>

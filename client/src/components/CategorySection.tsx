@@ -10,18 +10,17 @@ export function CategorySection({ category, index = 0 }: CategorySectionProps) {
   return (
     <section
       id={category.id}
-      className="py-12 md:py-16 border-b border-orange-100 last:border-b-0"
+      className="py-12 md:py-16 border-b border-[#ebe9e6] last:border-b-0 scroll-mt-20"
     >
       {/* Category Header with Gradient Accent */}
       <div className="mb-8 relative">
         <div className="flex items-center gap-4 mb-2">
           <span className="text-3xl md:text-4xl">{category.emoji}</span>
-          <h2 className="font-poppins font-bold text-2xl md:text-3xl text-foreground">
+          <h2 className="font-poppins font-bold text-2xl md:text-3xl text-[#0d0f13] uppercase tracking-wide">
             {category.name}
           </h2>
         </div>
-        {/* Gradient accent bar */}
-        <div className="h-1 w-24 bg-gradient-to-r from-yellow-400 via-orange-500 to-orange-600 rounded-full" />
+        <div className="h-1 w-24 bg-gradient-to-r from-[#e88627] via-[#c08643] to-[#ac312d] rounded-full" />
       </div>
 
       {/* Menu Items Grid */}

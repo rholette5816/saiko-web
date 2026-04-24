@@ -57,22 +57,28 @@ export function AboutSection() {
 
           {/* Right: Restaurant Image */}
           <div className="relative h-96 md:h-full min-h-96 md:min-h-[500px] rounded-2xl overflow-hidden shadow-xl">
+            {/* TODO: Replace with real Saiko interior photo. Warm lighting, customers dining, storefront at night works well. */}
             <img
               src="https://d2xsxph8kpxj0f.cloudfront.net/310519663376430088/RVzgkYvoeVKSdip6UycaUV/saiko-restaurant-interior-CavGStzCPFtwPP64FFyqaF.webp"
-              alt="Saiko Restaurant Interior"
+              alt="Saiko Restaurant interior, warm dining ambiance in Oton Iloilo"
               className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
             />
           </div>
         </div>
 
         {/* Brand Statement */}
-        <div className="mt-16 md:mt-20 bg-[#ac312d] rounded-2xl p-8 md:p-12 text-white text-center">
-          <p className="font-display text-2xl md:text-3xl italic mb-3">
-            "At Saiko, it's all about balance"
-          </p>
-          <p className="text-lg opacity-90">
-            Clean design, warm flavors, and food that speaks for itself.
-          </p>
+        <div className="mt-16 md:mt-20 bg-[#0d0f13] rounded-2xl p-8 md:p-12 text-white text-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#e88627]/10 via-transparent to-[#c08643]/10 pointer-events-none" />
+          <div className="relative">
+            <p className="font-display text-2xl md:text-3xl italic mb-3 text-[#f5a24b]">
+              "At Saiko, it's all about balance"
+            </p>
+            <p className="text-lg opacity-90">
+              Clean design, warm flavors, and food that speaks for itself.
+            </p>
+          </div>
         </div>
       </div>
     </section>
