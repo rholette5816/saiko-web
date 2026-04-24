@@ -1,3 +1,5 @@
+import teamImg from "@/assets/images/team.png";
+
 export function TeamSection() {
   return (
     <section className="py-16 md:py-24 bg-white">
@@ -16,9 +18,8 @@ export function TeamSection() {
 
         {/* Team Image */}
         <div className="relative w-full h-96 md:h-[500px] rounded-2xl overflow-hidden shadow-xl mb-12">
-          {/* TODO: Replace with real Saiko team photo. Behind-counter shot, uniforms on, happy staff. */}
           <img
-            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663376430088/RVzgkYvoeVKSdip6UycaUV/saiko-team-photo-i5LRX3KoJBJWfViN5XifKP.webp"
+            src={teamImg}
             alt="Saiko Ramen & Sushi team behind the counter"
             className="w-full h-full object-cover"
             loading="lazy"

@@ -1,3 +1,5 @@
+import ourStoryImg from "@/assets/images/our-story.png";
+
 export function AboutSection() {
   return (
     <section className="py-16 md:py-24 bg-[#ebe9e6]">
@@ -57,9 +59,8 @@ export function AboutSection() {
 
           {/* Right: Restaurant Image */}
           <div className="relative h-96 md:h-full min-h-96 md:min-h-[500px] rounded-2xl overflow-hidden shadow-xl">
-            {/* TODO: Replace with real Saiko interior photo. Warm lighting, customers dining, storefront at night works well. */}
             <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663376430088/RVzgkYvoeVKSdip6UycaUV/saiko-restaurant-interior-CavGStzCPFtwPP64FFyqaF.webp"
+              src={ourStoryImg}
               alt="Saiko Restaurant interior, warm dining ambiance in Oton Iloilo"
               className="w-full h-full object-cover"
               loading="lazy"

@@ -1,6 +1,6 @@
 import { Analytics } from "@/components/Analytics";
 import { AboutSection } from "@/components/AboutSection";
-import { BestSellersSection } from "@/components/BestSellersSection";
+import { FeaturedSection } from "@/components/FeaturedSection";
 import { DeliverySection } from "@/components/DeliverySection";
 import { Footer } from "@/components/Footer";
 import { HeroSection } from "@/components/HeroSection";
@@ -20,13 +20,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white pb-16 md:pb-0">
-      <a href="#best-sellers" className="skip-link">Skip to best sellers</a>
+      <a href="#featured" className="skip-link">Skip to featured dishes</a>
       <TopNav />
       <HeroSection />
 
       <Reveal><DeliverySection /></Reveal>
       <section id="about"><Reveal><AboutSection /></Reveal></section>
-      <Reveal><BestSellersSection /></Reveal>
+      <Reveal><FeaturedSection /></Reveal>
       <Reveal><ReviewsSection /></Reveal>
       <Reveal><NewsletterBanner /></Reveal>
       <Reveal><TeamSection /></Reveal>

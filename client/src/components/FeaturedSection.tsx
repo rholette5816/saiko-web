@@ -9,22 +9,21 @@ const badgeConfig = {
   spicy: { label: "Spicy", Icon: Flame, className: "bg-[#e88627] text-white" },
 } as const;
 
-export function BestSellersSection() {
-  // Featured category = our best sellers. Pull the first 4.
+export function FeaturedSection() {
   const featured = menuData.find((c) => c.id === "featured")?.items.slice(0, 4) ?? [];
 
   return (
-    <section id="best-sellers" className="py-16 md:py-24 bg-white">
+    <section id="featured" className="py-16 md:py-24 bg-white">
       <div className="container">
         <div className="text-center mb-12 md:mb-16">
           <p className="text-xs md:text-sm uppercase tracking-widest text-[#ac312d] font-bold mb-2">
-            The Crowd Favorites
+            Must-Try Dishes
           </p>
           <h2 className="font-poppins font-bold text-3xl md:text-4xl text-[#0d0f13] mb-4 uppercase tracking-wide">
-            Best Sellers
+            Featured
           </h2>
           <p className="text-lg text-[#705d48] max-w-2xl mx-auto mb-6">
-            The dishes our regulars keep coming back for. Start here, then explore the full menu.
+            Our chef's picks that regulars keep coming back for. Start here, then explore the full menu.
           </p>
           <div className="h-1 w-24 bg-gradient-to-r from-[#e88627] via-[#c08643] to-[#ac312d] rounded-full mx-auto" />
         </div>
@@ -38,8 +37,8 @@ export function BestSellersSection() {
                 className="group relative bg-white rounded-2xl overflow-hidden border border-[#ebe9e6] hover:border-[#c08643]/60 hover:shadow-xl transition-all duration-300"
                 style={{ animation: `fadeInUp 0.5s ease-out ${index * 0.1}s backwards` }}
               >
-                {/* Image slot */}
-                <div className="relative aspect-[4/3] bg-gradient-to-br from-[#ebe9e6] via-[#f5f4f2] to-[#ebe9e6] flex items-center justify-center">
+                {/* Image */}
+                <div className="relative aspect-[4/3] bg-gradient-to-br from-[#ebe9e6] via-[#f5f4f2] to-[#ebe9e6] flex items-center justify-center overflow-hidden">
                   {item.image ? (
                     <img
                       src={item.image}
@@ -49,7 +48,6 @@ export function BestSellersSection() {
                       decoding="async"
                     />
                   ) : (
-                    /* TODO: Replace placeholder emoji with real dish photos in item.image */
                     <span className="text-7xl opacity-60">🍜</span>
                   )}
                   {badge && (

@@ -1,3 +1,8 @@
+import featuredLavaRice from "@/assets/images/featured-lava-rice.png";
+import featuredGyoza from "@/assets/images/featured-gyoza.png";
+import featuredWagyuTeppan from "@/assets/images/featured-wagyu-teppan.png";
+import featuredDragonRoll from "@/assets/images/featured-dragon-roll.png";
+
 export type MenuBadge = "bestseller" | "chefs-pick" | "new" | "spicy";
 
 export interface MenuItem {
@@ -6,7 +11,7 @@ export interface MenuItem {
   price: number;
   description?: string;
   emoji?: string;
-  image?: string;       // TODO: populate with real dish photos in public/menu/
+  image?: string;
   badge?: MenuBadge;
 }
 
@@ -20,13 +25,13 @@ export interface MenuCategory {
 export const menuData: MenuCategory[] = [
   {
     id: "featured",
-    name: "FEATURED / PROMO ITEMS",
-    emoji: "🍜",
+    name: "FEATURED",
+    emoji: "⭐",
     items: [
-      { id: "f1", name: "Salted Egg Ramen", price: 300, badge: "bestseller", description: "Rich salted-egg sauce over our home-made ramen noodles." },
-      { id: "f2", name: "Gyuniku (Spicy Beef Noodles)", price: 415, badge: "spicy", description: "Tender beef, bold spice, slurp-worthy broth." },
-      { id: "f3", name: "Cheesy Parmesan", price: 314, badge: "chefs-pick", description: "Creamy parmesan coating every strand." },
-      { id: "f4", name: "Honey Soy Lemon", price: 314, badge: "new", description: "Sweet-savory-bright. A fresh take on ramen." },
+      { id: "f1", name: "Wagyu Teppan", price: 504, badge: "chefs-pick", image: featuredWagyuTeppan, description: "Premium wagyu seared teppan-style. Buttery, rich, unforgettable." },
+      { id: "f2", name: "Lava Rice", price: 359, badge: "spicy", image: featuredLavaRice, description: "Fiery house sauce over fluffy fried rice. Sulit at masulit." },
+      { id: "f3", name: "Uramaki Dragon Roll", price: 325, badge: "bestseller", image: featuredDragonRoll, description: "Our signature sushi roll. Bold flavors, Instagram-ready." },
+      { id: "f4", name: "Pork Gyoza", price: 157, badge: "new", image: featuredGyoza, description: "Pan-seared dumplings, crispy bottom, juicy inside. Perfect starter." },
     ],
   },
   {
