@@ -89,7 +89,7 @@ export function LocationSection() {
             {/* Action Buttons */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 pt-6 border-t border-[#e5e2de]">
               <a
-                href="https://maps.google.com/?q=Circumferential+Road+1+Pulo+Maestra+Vita+Oton+Iloilo"
+                href="https://maps.app.goo.gl/8vgyd4T6anvqEJHM6"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="py-2 px-4 bg-white border border-[#0d0f13] text-[#0d0f13] font-medium rounded-lg hover:bg-[#ebe9e6] transition-colors text-sm text-center uppercase tracking-wide"
@@ -118,7 +118,7 @@ export function LocationSection() {
         <div className="relative w-full h-96 md:h-[450px] rounded-2xl overflow-hidden shadow-lg mb-12">
           <iframe
             title="Saiko Ramen & Sushi Location"
-            src="https://maps.google.com/maps?q=Circumferential+Road+1+Pulo+Maestra+Vita+Oton+Iloilo&output=embed"
+            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3920.019872340959!2d122.50951888398946!3d10.73295053271444!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x33aefbed44ccd753%3A0xd7169319f138f122!2sSaiko%20Ramen%20and%20Sushi!5e0!3m2!1sen!2sph!4v1777042459769!5m2!1sen!2sph"
             width="100%"
             height="100%"
             style={{ border: 0 }}

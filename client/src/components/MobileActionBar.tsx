@@ -14,7 +14,7 @@ const actions = [
     highlight: false,
   },
   {
-    href: "https://maps.google.com/?q=Circumferential+Road+1+Pulo+Maestra+Vita+Oton+Iloilo",
+    href: "https://maps.app.goo.gl/8vgyd4T6anvqEJHM6",
     label: "Directions",
     icon: MapPin,
     highlight: false,
