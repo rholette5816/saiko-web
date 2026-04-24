@@ -24,10 +24,13 @@ export function Footer() {
           <div className="flex flex-col gap-4">
             <h4 className="font-poppins font-bold text-lg uppercase tracking-wide text-[#c08643]">Quick Links</h4>
             <ul className="space-y-2 text-sm text-[#ebe9e6]/70">
-              <li><a href="#featured" className="hover:text-white transition-colors">Featured Items</a></li>
-              <li><a href="#ramen" className="hover:text-white transition-colors">Ramen</a></li>
-              <li><a href="#sushi" className="hover:text-white transition-colors">Sushi</a></li>
-              <li><a href="#drinks" className="hover:text-white transition-colors">Drinks</a></li>
+              <li><a href="/" className="hover:text-white transition-colors">Home</a></li>
+              <li><a href="/menu" className="hover:text-white transition-colors">Full Menu</a></li>
+              <li><a href="/menu#featured" className="hover:text-white transition-colors">Featured / Promo</a></li>
+              <li><a href="/menu#ramen" className="hover:text-white transition-colors">Ramen</a></li>
+              <li><a href="/menu#sushi" className="hover:text-white transition-colors">Sushi</a></li>
+              <li><a href="/menu#bento" className="hover:text-white transition-colors">Bento</a></li>
+              <li><a href="/#location" className="hover:text-white transition-colors">Visit Us</a></li>
             </ul>
           </div>
 

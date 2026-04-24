@@ -1,5 +1,6 @@
 import logo from "@/assets/logo.png";
 import { Phone, MessageCircle, Star } from "lucide-react";
+import { Link } from "wouter";
 import { OpenStatusBadge } from "./OpenStatusBadge";
 
 export function HeroSection() {
@@ -62,12 +63,12 @@ export function HeroSection() {
             >
               <Phone size={18} /> Call Now
             </a>
-            <a
-              href="#full-menu"
+            <Link
+              href="/menu"
               className="flex items-center justify-center px-6 md:px-8 py-3 md:py-4 border-2 border-[#0d0f13] text-[#0d0f13] font-poppins font-bold rounded-lg hover:bg-[#ebe9e6] transition-all duration-200 text-center uppercase tracking-wide"
             >
               View Menu
-            </a>
+            </Link>
           </div>
 
           {/* Quick Info */}
