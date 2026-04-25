@@ -63,35 +63,24 @@ export default function Checkout() {
     }));
 
     try {
-      const { data: orderRow, error: orderError } = await supabase
-        .from("orders")
-        .insert({
-          customer_name: name.trim(),
-          customer_phone: phone.trim(),
-          pickup_label: selectedSlot.label,
-          pickup_time: selectedSlot.date.toISOString(),
-          is_pre_order: selectedSlot.isTomorrow ?? false,
-          notes: notes.trim() || null,
-          total_amount: cart.totalPrice,
-        })
-        .select("id, order_number")
-        .single();
+      const { data: orderResult, error: orderError } = await supabase.rpc("place_order_with_items", {
+        p_customer_name: name.trim(),
+        p_customer_phone: phone.trim(),
+        p_pickup_label: selectedSlot.label,
+        p_pickup_time: selectedSlot.date.toISOString(),
+        p_is_pre_order: selectedSlot.isTomorrow ?? false,
+        p_notes: notes.trim() || null,
+        p_total_amount: cart.totalPrice,
+        p_items: orderItems,
+      });
 
-      if (orderError || !orderRow) {
-        setError("Something went wrong. Try again or call us directly.");
-        setSubmitting(false);
-        return;
-      }
+      const firstRow = Array.isArray(orderResult) ? orderResult[0] : orderResult;
+      const orderNumber =
+        firstRow && typeof firstRow === "object" && "order_number" in firstRow
+          ? String((firstRow as { order_number: string }).order_number)
+          : "";
 
-      const { error: itemsError } = await supabase.from("order_items").insert(
-        orderItems.map((item) => ({
-          ...item,
-          order_id: orderRow.id,
-        })),
-      );
-
-      if (itemsError) {
-        await supabase.from("orders").delete().eq("id", orderRow.id);
+      if (orderError || !orderNumber) {
         setError("Something went wrong. Try again or call us directly.");
         setSubmitting(false);
         return;
@@ -101,7 +90,7 @@ export default function Checkout() {
       sessionStorage.setItem(
         "saiko-last-order",
         JSON.stringify({
-          orderNumber: orderRow.order_number,
+          orderNumber,
           orderText,
           name: name.trim(),
           phone: phone.trim(),
