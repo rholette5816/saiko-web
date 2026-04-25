@@ -328,3 +328,28 @@ Inherits from `AGENTS.md`. Specific overrides for this task:
 - The `package.json` build/dev scripts already work with pnpm. Use `pnpm add @supabase/supabase-js` (not npm) if `pnpm-lock.yaml` exists.
 - Do not introduce a TypeScript `Database` types file (e.g., from `supabase gen types`). The two interfaces in `lib/supabase.ts` are enough for Phase 1.
 - Do NOT modify the cart, the menu data, the hero, the footer, or any other component beyond the two pages listed.
+
+## Handoff Note (2026-04-26)
+
+Current production checkout issue to investigate:
+
+- Request failing: `POST https://wiutixrypqrlfbandjox.supabase.co/rest/v1/orders?select=id,order_number`
+- Error: `401 Unauthorized`
+- Console also shows Umami/preload warnings, but those appear non-blocking.
+
+What has already been validated:
+
+- Supabase schema/RLS/policy/function/sequence verification returned all `true`.
+- This strongly suggests the failure is related to the insert flow using `.insert(...).select("id, order_number").single()` while anon has insert-only access.
+
+Likely root cause:
+
+- PostgREST returning selected fields after insert appears to require `SELECT` permission.
+- Current RLS setup allows anon insert but does not allow anon select, so returning payload is denied.
+
+Requested fix direction:
+
+- Implement a proper fix in checkout that avoids requiring broad anon read access.
+- Do not leave a permanent anon `SELECT`-all policy on `orders`.
+- Preserve order-number-based Messenger redirect flow.
+- Re-run acceptance checks and report results.
