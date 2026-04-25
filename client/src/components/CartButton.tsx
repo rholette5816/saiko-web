@@ -12,7 +12,8 @@ export function CartButton() {
     <button
       type="button"
       onClick={openDrawer}
-      className="md:hidden fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[70] flex items-center gap-2 px-5 py-3 bg-[#0d0f13] text-white rounded-full shadow-2xl hover:bg-black transition-all active:scale-95"
+      className="md:hidden fixed right-4 top-4 z-50 flex items-center gap-2 px-5 py-3 bg-[#0d0f13] text-white rounded-full shadow-2xl hover:bg-black transition-all active:scale-95"
+      style={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
       aria-label={`Open cart, ${totalQty} item${totalQty === 1 ? "" : "s"}`}
     >
       <ShoppingBag size={18} />
