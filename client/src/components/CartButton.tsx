@@ -16,7 +16,7 @@ export function CartButton() {
       className={`md:hidden fixed right-4 top-4 z-50 bg-[#0d0f13] text-white rounded-full shadow-2xl hover:bg-black transition-all active:scale-95 ${
         hasItems ? "flex items-center justify-center gap-1.5 h-11 min-w-14 px-2.5" : "w-11 h-11 flex items-center justify-center"
       }`}
-      style={{ position: "fixed", right: "1rem", top: "calc(env(safe-area-inset-top) + 1rem)" }}
+      style={{ position: "fixed", right: "1rem", top: "calc(env(safe-area-inset-top) + 4rem)" }}
       aria-label={hasItems ? `Open cart, ${totalQty} item${totalQty === 1 ? "" : "s"}` : "Open cart"}
     >
       <ShoppingBag size={18} />
