@@ -38,3 +38,10 @@ export interface OrderItemRow {
   quantity: number;
   line_total: number;
 }
+
+export interface ItemOverrideRow {
+  item_id: string;
+  is_available: boolean;
+  is_best_seller: boolean;
+  updated_at: string;
+}

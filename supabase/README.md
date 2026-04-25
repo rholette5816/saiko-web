@@ -103,6 +103,11 @@ Allowed status values: `pending`, `preparing`, `ready`, `completed`, `cancelled`
 3. Supabase Dashboard -> Edge Functions -> Secrets -> add `BOTCAKE_API_KEY` (set the value separately and never commit it).
 4. Add and deploy `attach-order-contact` from `supabase/functions/attach-order-contact/index.ts`.
 5. Add and deploy `notify-order-ready` from `supabase/functions/notify-order-ready/index.ts`.
+6. **Disable JWT verification for each function** (required so Botcake can call with only `x-api-key`):
+   - For each of `get-order`, `update-order-status`, `attach-order-contact`, `notify-order-ready`:
+     - Open the function in the Dashboard -> Details -> toggle **Enforce JWT Verification** to OFF.
+   - The functions enforce their own auth (`x-api-key` for Botcake, `Bearer` Supabase session for admin calls), so the platform-level JWT gate is redundant and blocks Botcake.
+   - If you ever redeploy via Supabase CLI, `supabase/config.toml` already encodes `verify_jwt = false` for these four functions.
 
 ### Contact link + ready notification
 
@@ -130,5 +135,14 @@ Additional endpoints:
 
 Required secrets for ready notification relay:
 
-- `FB_PAGE_ACCESS_TOKEN` (Facebook Page access token used to send Messenger messages)
+- `FB_PAGE_ACCESS_TOKEN` (Facebook Page access token used to send Messenger messages. Use a long-lived Page token; short-lived ones expire in ~60 min.)
 - `FB_GRAPH_API_VERSION` (optional, defaults to `v20.0`)
+
+### Troubleshooting Messenger notifications
+
+Common failure modes and what they mean:
+
+- `Unauthorized` from `attach-order-contact` or `update-order-status`: JWT verification still on for that function. Toggle it off in the Dashboard (step 6 above).
+- `Order has no messenger_psid link` from `notify-order-ready`: Botcake never called `attach-order-contact`. Check that the Botcake page has a `messaging_referrals` flow that picks up `m.me_ref` (the order number) and calls `attach-order-contact` with `{ ref, messenger_psid }`.
+- `Missing FB_PAGE_ACCESS_TOKEN secret`: secret not set in Supabase Dashboard -> Edge Functions -> Secrets.
+- `Failed to send Botcake notification` (502) with FB error in `detail`: most often an expired Page token, or Meta blocked the `MESSAGE_TAG / POST_PURCHASE_UPDATE` send. Refresh the Page token or check Meta policy.

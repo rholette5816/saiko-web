@@ -1,10 +1,12 @@
 import { AdminLayout } from "@/components/AdminLayout";
+import { exportOrdersToCsv } from "@/lib/csvExport";
 import { type DateRange, type DateRangeKey, getCustomRange, getRange } from "@/lib/dateRanges";
-import { supabase, type OrderRow } from "@/lib/supabase";
+import { supabase, type OrderItemRow, type OrderRow } from "@/lib/supabase";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 type StatusFilter = "all" | "pending" | "preparing" | "ready" | "completed" | "cancelled";
+type OrderWithItems = OrderRow & { order_items?: OrderItemRow[] };
 
 const dateOptions: Array<{ key: Exclude<DateRangeKey, "custom">; label: string }> = [
   { key: "today", label: "Today" },
@@ -42,9 +44,17 @@ function currencyPhp(value: number): string {
   return `\u20B1${value.toLocaleString("en-PH")}`;
 }
 
+function currentDateStamp(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}${m}${d}`;
+}
+
 export default function AdminOrders() {
   const [, navigate] = useLocation();
-  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dateKey, setDateKey] = useState<DateRangeKey>("today");
@@ -70,7 +80,7 @@ export default function AdminOrders() {
         setError(fetchError.message);
         setOrders([]);
       } else {
-        setOrders((data ?? []) as OrderRow[]);
+        setOrders((data ?? []) as OrderWithItems[]);
       }
       if (!silent) setLoading(false);
     },
@@ -88,12 +98,13 @@ export default function AdminOrders() {
     return () => {
       window.removeEventListener("saiko:new-order", onNewOrder);
       window.clearInterval(interval);
-    }
+    };
   }, [fetchOrders]);
 
   const totals = useMemo(() => {
     const amount = orders.reduce((sum, order) => sum + Number(order.total_amount), 0);
-    return { count: orders.length, amount };
+    const activeCount = orders.filter((order) => ["pending", "preparing", "ready"].includes(order.status)).length;
+    return { count: orders.length, amount, activeCount };
   }, [orders]);
 
   function applyRange(nextKey: Exclude<DateRangeKey, "custom">) {
@@ -107,17 +118,46 @@ export default function AdminOrders() {
     setRange(getCustomRange(customStart, customEnd));
   }
 
+  function handleExportCsv() {
+    const filename = `saiko-orders-${dateKey}-${currentDateStamp()}.csv`;
+    exportOrdersToCsv(
+      orders.map((order) => ({ ...order, items: order.order_items ?? [] })),
+      filename,
+    );
+  }
+
   return (
     <AdminLayout>
       <section className="space-y-4">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-[#0d0f13]">Orders</h1>
-            <p className="text-sm text-[#705d48]">{range.label}</p>
+        <div>
+          <h1 className="text-2xl font-bold text-[#0d0f13]">Orders</h1>
+          <p className="text-sm text-[#705d48]">{range.label}</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-xs uppercase tracking-wide text-[#705d48]">Orders</p>
+              <p className="text-xl font-bold text-[#0d0f13] mt-1">{totals.count}</p>
+            </div>
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-xs uppercase tracking-wide text-[#705d48]">Gross Sales</p>
+              <p className="text-xl font-bold text-[#0d0f13] mt-1">{currencyPhp(totals.amount)}</p>
+            </div>
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-xs uppercase tracking-wide text-[#705d48]">Active Status</p>
+              <p className="text-xl font-bold text-[#0d0f13] mt-1">{totals.activeCount}</p>
+            </div>
           </div>
-          <p className="text-sm font-semibold text-[#0d0f13]">
-            {totals.count} orders · {currencyPhp(totals.amount)} total
-          </p>
+          <div className="flex md:items-end">
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="w-full md:w-auto px-4 py-3 rounded-md bg-[#0d0f13] text-white text-sm font-semibold"
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg p-4 space-y-4">

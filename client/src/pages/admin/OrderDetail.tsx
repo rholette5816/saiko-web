@@ -40,6 +40,29 @@ function currencyPhp(value: number): string {
   return `\u20B1${value.toLocaleString("en-PH")}`;
 }
 
+async function readEdgeFunctionError(err: unknown): Promise<string> {
+  const fallback = err instanceof Error ? err.message : "Unknown error";
+  const ctx = (err as { context?: unknown })?.context;
+  if (!ctx || typeof (ctx as Response).json !== "function") return fallback;
+  const res = ctx as Response;
+  try {
+    const body = await res.clone().json();
+    if (body && typeof body === "object" && "error" in body && body.error) {
+      const detail = (body as { error: unknown; detail?: unknown }).detail;
+      return detail
+        ? `${String(body.error)} (${typeof detail === "string" ? detail : JSON.stringify(detail)})`
+        : String(body.error);
+    }
+    return JSON.stringify(body);
+  } catch {
+    try {
+      return (await res.clone().text()) || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+}
+
 export default function AdminOrderDetail({ id }: { id: string }) {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +113,8 @@ export default function AdminOrderDetail({ id }: { id: string }) {
         body: { ref: order.order_number },
       });
       if (notifyError) {
-        setError(`Order marked ready, but notify failed: ${notifyError.message}`);
+        const detail = await readEdgeFunctionError(notifyError);
+        setError(`Order marked ready, but notify failed: ${detail}`);
       } else {
         setNotice("Order marked as ready and customer notification sent.");
       }

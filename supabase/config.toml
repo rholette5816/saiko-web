@@ -1,0 +1,11 @@
+[functions.attach-order-contact]
+verify_jwt = false
+
+[functions.update-order-status]
+verify_jwt = false
+
+[functions.notify-order-ready]
+verify_jwt = false
+
+[functions.get-order]
+verify_jwt = false

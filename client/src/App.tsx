@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CartProvider } from "./lib/cart";
+import { MenuOverridesProvider } from "./lib/itemOverrides";
 import { CartDrawer } from "./components/CartDrawer";
 import { CartButton } from "./components/CartButton";
 import { AdminGuard } from "./components/AdminGuard";
@@ -18,6 +19,7 @@ import AdminLogin from "./pages/admin/Login";
 import AdminOrderDetail from "./pages/admin/OrderDetail";
 import AdminOrders from "./pages/admin/Orders";
 import AdminPrintSlip from "./pages/admin/PrintSlip";
+import AdminProducts from "./pages/admin/Products";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -60,6 +62,11 @@ function Router() {
             <AdminOrders />
           </AdminGuard>
         </Route>
+        <Route path={"/admin/products"}>
+          <AdminGuard>
+            <AdminProducts />
+          </AdminGuard>
+        </Route>
         <Route path={"/admin/orders/:id/print"}>
           {(params) => (
             <AdminGuard>
@@ -93,10 +100,12 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <CartProvider>
-            <Toaster />
-            <Router />
-            <CartButton />
-            <CartDrawer />
+            <MenuOverridesProvider>
+              <Toaster />
+              <Router />
+              <CartButton />
+              <CartDrawer />
+            </MenuOverridesProvider>
           </CartProvider>
         </TooltipProvider>
       </ThemeProvider>
