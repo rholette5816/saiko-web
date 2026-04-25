@@ -1,7 +1,7 @@
 import { AdminLayout } from "@/components/AdminLayout";
 import { type DateRange, type DateRangeKey, getCustomRange, getRange } from "@/lib/dateRanges";
 import { supabase, type OrderRow } from "@/lib/supabase";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 type StatusFilter = "all" | "pending" | "preparing" | "ready" | "completed" | "cancelled";
@@ -53,10 +53,9 @@ export default function AdminOrders() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    async function fetchOrders() {
-      setLoading(true);
+  const fetchOrders = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
       setError(null);
       let query = supabase
         .from("orders")
@@ -67,20 +66,30 @@ export default function AdminOrders() {
         .limit(200);
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       const { data, error: fetchError } = await query;
-      if (!active) return;
       if (fetchError) {
         setError(fetchError.message);
         setOrders([]);
       } else {
         setOrders((data ?? []) as OrderRow[]);
       }
-      setLoading(false);
-    }
+      if (!silent) setLoading(false);
+    },
+    [range.startIso, range.endIso, statusFilter],
+  );
+
+  useEffect(() => {
     fetchOrders();
+  }, [fetchOrders]);
+
+  useEffect(() => {
+    const onNewOrder = () => fetchOrders(true);
+    window.addEventListener("saiko:new-order", onNewOrder);
+    const interval = window.setInterval(() => fetchOrders(true), 15000);
     return () => {
-      active = false;
-    };
-  }, [range, statusFilter]);
+      window.removeEventListener("saiko:new-order", onNewOrder);
+      window.clearInterval(interval);
+    }
+  }, [fetchOrders]);
 
   const totals = useMemo(() => {
     const amount = orders.reduce((sum, order) => sum + Number(order.total_amount), 0);

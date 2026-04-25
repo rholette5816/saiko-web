@@ -1,7 +1,7 @@
 import { AdminLayout } from "@/components/AdminLayout";
 import { getRange } from "@/lib/dateRanges";
 import { supabase, type OrderRow } from "@/lib/supabase";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 
 const ACTIVE_STATUSES = new Set(["pending", "preparing", "ready"]);
@@ -22,32 +22,37 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    async function fetchToday() {
-      setLoading(true);
-      setError(null);
-      const range = getRange("today");
-      const { data, error: fetchError } = await supabase
-        .from("orders")
-        .select("*")
-        .gte("created_at", range.startIso)
-        .lt("created_at", range.endIso)
-        .order("created_at", { ascending: false });
-      if (!active) return;
-      if (fetchError) {
-        setError(fetchError.message);
-        setOrders([]);
-      } else {
-        setOrders((data ?? []) as OrderRow[]);
-      }
-      setLoading(false);
+  const fetchToday = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError(null);
+    const range = getRange("today");
+    const { data, error: fetchError } = await supabase
+      .from("orders")
+      .select("*")
+      .gte("created_at", range.startIso)
+      .lt("created_at", range.endIso)
+      .order("created_at", { ascending: false });
+    if (fetchError) {
+      setError(fetchError.message);
+      setOrders([]);
+    } else {
+      setOrders((data ?? []) as OrderRow[]);
     }
-    fetchToday();
-    return () => {
-      active = false;
-    };
+    if (!silent) setLoading(false);
   }, []);
+
+  useEffect(() => {
+    fetchToday();
+
+    const onNewOrder = () => fetchToday(true);
+    window.addEventListener("saiko:new-order", onNewOrder);
+    const interval = window.setInterval(() => fetchToday(true), 15000);
+
+    return () => {
+      window.removeEventListener("saiko:new-order", onNewOrder);
+      window.clearInterval(interval);
+    };
+  }, [fetchToday]);
 
   const stats = useMemo(() => {
     const totalSales = orders.reduce((sum, order) => sum + Number(order.total_amount), 0);
