@@ -2,12 +2,11 @@ import { useCart } from "@/lib/cart";
 import { ShoppingBag } from "lucide-react";
 
 /*
-  Floating cart button. Shows on mobile only when items exist.
+  Floating cart button. Always visible on mobile.
   Sits above the MobileActionBar (bottom: 4.5rem).
 */
 export function CartButton() {
   const { totalQty, openDrawer } = useCart();
-  if (totalQty === 0) return null;
 
   return (
     <button
@@ -18,9 +17,11 @@ export function CartButton() {
     >
       <ShoppingBag size={18} />
       <span className="font-bold text-sm uppercase tracking-wide">Cart</span>
-      <span className="bg-[#ac312d] text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
-        {totalQty}
-      </span>
+      {totalQty > 0 && (
+        <span className="bg-[#ac312d] text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
+          {totalQty}
+        </span>
+      )}
     </button>
   );
 }
