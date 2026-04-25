@@ -101,3 +101,34 @@ Allowed status values: `pending`, `preparing`, `ready`, `completed`, `cancelled`
 1. Supabase Dashboard -> Edge Functions -> New function -> name it `get-order` -> paste contents of `supabase/functions/get-order/index.ts` -> Deploy.
 2. Repeat for `update-order-status` using `supabase/functions/update-order-status/index.ts`.
 3. Supabase Dashboard -> Edge Functions -> Secrets -> add `BOTCAKE_API_KEY` (set the value separately and never commit it).
+4. Add and deploy `attach-order-contact` from `supabase/functions/attach-order-contact/index.ts`.
+5. Add and deploy `notify-order-ready` from `supabase/functions/notify-order-ready/index.ts`.
+
+### Contact link + ready notification
+
+Additional endpoints:
+
+- `POST https://wiutixrypqrlfbandjox.supabase.co/functions/v1/attach-order-contact`
+- `POST https://wiutixrypqrlfbandjox.supabase.co/functions/v1/notify-order-ready`
+
+`attach-order-contact` is called by Botcake after referral capture to link Messenger user:
+
+```json
+{
+  "ref": "SAIKO-0001",
+  "messenger_psid": "1234567890123456"
+}
+```
+
+`notify-order-ready` is called by admin dashboard when marking order as ready:
+
+```json
+{
+  "ref": "SAIKO-0001"
+}
+```
+
+Required secrets for ready notification relay:
+
+- `FB_PAGE_ACCESS_TOKEN` (Facebook Page access token used to send Messenger messages)
+- `FB_GRAPH_API_VERSION` (optional, defaults to `v20.0`)

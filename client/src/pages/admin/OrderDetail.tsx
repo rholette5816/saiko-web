@@ -16,6 +16,8 @@ interface OrderWithItems {
   notes: string | null;
   status: OrderStatus;
   total_amount: number | string;
+  messenger_psid?: string | null;
+  ready_notified_at?: string | null;
   created_at: string;
   order_items: Array<{
     id: string;
@@ -73,15 +75,30 @@ export default function AdminOrderDetail({ id }: { id: string }) {
   }, [notice]);
 
   async function updateStatus(nextStatus: OrderStatus) {
+    if (!order) return;
     setSavingStatus(nextStatus);
     setError(null);
     const { error: updateError } = await supabase.from("orders").update({ status: nextStatus }).eq("id", id);
-    setSavingStatus(null);
     if (updateError) {
+      setSavingStatus(null);
       setError(updateError.message);
       return;
     }
-    setNotice(`Order marked as ${nextStatus}.`);
+
+    if (nextStatus === "ready") {
+      const { error: notifyError } = await supabase.functions.invoke("notify-order-ready", {
+        body: { ref: order.order_number },
+      });
+      if (notifyError) {
+        setError(`Order marked ready, but notify failed: ${notifyError.message}`);
+      } else {
+        setNotice("Order marked as ready and customer notification sent.");
+      }
+    } else {
+      setNotice(`Order marked as ${nextStatus}.`);
+    }
+
+    setSavingStatus(null);
     await fetchOrder();
   }
 
@@ -115,6 +132,14 @@ export default function AdminOrderDetail({ id }: { id: string }) {
               <p className="text-sm text-[#0d0f13]">{order.customer_name}</p>
               <p className="text-sm text-[#705d48]">{order.customer_phone}</p>
               <p className="text-sm text-[#705d48] mt-1">{order.pickup_label}</p>
+              <p className="text-xs text-[#705d48] mt-1">
+                Messenger link: {order.messenger_psid ? "Linked" : "Not linked yet"}
+              </p>
+              {order.ready_notified_at && (
+                <p className="text-xs text-[#2d7a3e] mt-1">
+                  Ready alert sent: {new Date(order.ready_notified_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
+                </p>
+              )}
               {order.is_pre_order && (
                 <span className="inline-block mt-2 text-xs px-2 py-1 rounded-full bg-[#ac312d]/10 text-[#ac312d] font-semibold">
                   Pre-order

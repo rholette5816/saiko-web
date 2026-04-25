@@ -23,6 +23,8 @@ export interface OrderRow {
   notes: string | null;
   status: "pending" | "preparing" | "ready" | "completed" | "cancelled";
   total_amount: number;
+  messenger_psid?: string | null;
+  ready_notified_at?: string | null;
   created_at: string;
   updated_at: string;
 }
