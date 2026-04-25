@@ -1,0 +1,259 @@
+import { AdminLayout } from "@/components/AdminLayout";
+import { type DateRange, type DateRangeKey, getCustomRange, getRange } from "@/lib/dateRanges";
+import { supabase, type OrderRow } from "@/lib/supabase";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
+
+type StatusFilter = "all" | "pending" | "preparing" | "ready" | "completed" | "cancelled";
+
+const dateOptions: Array<{ key: Exclude<DateRangeKey, "custom">; label: string }> = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "last7", label: "Last 7 Days" },
+  { key: "thisMonth", label: "This Month" },
+];
+
+const statusOptions: Array<{ key: StatusFilter; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "pending", label: "Pending" },
+  { key: "preparing", label: "Preparing" },
+  { key: "ready", label: "Ready" },
+  { key: "completed", label: "Completed" },
+  { key: "cancelled", label: "Cancelled" },
+];
+
+const statusColors: Record<Exclude<StatusFilter, "all">, string> = {
+  pending: "bg-[#705d48] text-white",
+  preparing: "bg-[#e88627] text-[#0d0f13]",
+  ready: "bg-[#c08643] text-[#0d0f13]",
+  completed: "bg-[#0d0f13] text-white",
+  cancelled: "bg-[#ac312d] text-white",
+};
+
+function formatDate(value: string): string {
+  return new Date(value).toLocaleString("en-PH", {
+    timeZone: "Asia/Manila",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function currencyPhp(value: number): string {
+  return `\u20B1${value.toLocaleString("en-PH")}`;
+}
+
+export default function AdminOrders() {
+  const [, navigate] = useLocation();
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dateKey, setDateKey] = useState<DateRangeKey>("today");
+  const [range, setRange] = useState<DateRange>(getRange("today"));
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function fetchOrders() {
+      setLoading(true);
+      setError(null);
+      let query = supabase
+        .from("orders")
+        .select("*, order_items(*)")
+        .gte("created_at", range.startIso)
+        .lt("created_at", range.endIso)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (statusFilter !== "all") query = query.eq("status", statusFilter);
+      const { data, error: fetchError } = await query;
+      if (!active) return;
+      if (fetchError) {
+        setError(fetchError.message);
+        setOrders([]);
+      } else {
+        setOrders((data ?? []) as OrderRow[]);
+      }
+      setLoading(false);
+    }
+    fetchOrders();
+    return () => {
+      active = false;
+    };
+  }, [range, statusFilter]);
+
+  const totals = useMemo(() => {
+    const amount = orders.reduce((sum, order) => sum + Number(order.total_amount), 0);
+    return { count: orders.length, amount };
+  }, [orders]);
+
+  function applyRange(nextKey: Exclude<DateRangeKey, "custom">) {
+    setDateKey(nextKey);
+    setRange(getRange(nextKey));
+  }
+
+  function applyCustomRange() {
+    if (!customStart || !customEnd) return;
+    setDateKey("custom");
+    setRange(getCustomRange(customStart, customEnd));
+  }
+
+  return (
+    <AdminLayout>
+      <section className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-[#0d0f13]">Orders</h1>
+            <p className="text-sm text-[#705d48]">{range.label}</p>
+          </div>
+          <p className="text-sm font-semibold text-[#0d0f13]">
+            {totals.count} orders · {currencyPhp(totals.amount)} total
+          </p>
+        </div>
+
+        <div className="bg-white rounded-lg p-4 space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {dateOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => applyRange(option.key)}
+                className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
+                  dateKey === option.key ? "bg-[#0d0f13] text-white" : "bg-[#ebe9e6] text-[#0d0f13]"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setDateKey("custom")}
+              className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
+                dateKey === "custom" ? "bg-[#0d0f13] text-white" : "bg-[#ebe9e6] text-[#0d0f13]"
+              }`}
+            >
+              Custom
+            </button>
+          </div>
+
+          {dateKey === "custom" && (
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-xs text-[#705d48]">
+                Start
+                <input
+                  type="date"
+                  value={customStart}
+                  onChange={(event) => setCustomStart(event.target.value)}
+                  className="block mt-1 border border-[#d8d2cb] rounded-md px-2 py-1.5 text-sm"
+                />
+              </label>
+              <label className="text-xs text-[#705d48]">
+                End
+                <input
+                  type="date"
+                  value={customEnd}
+                  onChange={(event) => setCustomEnd(event.target.value)}
+                  className="block mt-1 border border-[#d8d2cb] rounded-md px-2 py-1.5 text-sm"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={applyCustomRange}
+                className="px-3 py-2 rounded-md bg-[#c08643] text-[#0d0f13] text-sm font-semibold"
+              >
+                Apply
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {statusOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setStatusFilter(option.key)}
+                className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
+                  statusFilter === option.key ? "bg-[#c08643] text-[#0d0f13]" : "bg-[#ebe9e6] text-[#0d0f13]"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg p-4">
+          {loading && <p className="text-sm text-[#705d48]">Loading orders...</p>}
+          {error && <p className="text-sm text-[#ac312d]">Failed to load: {error}</p>}
+          {!loading && !error && orders.length === 0 && (
+            <p className="text-sm text-[#705d48]">No orders for this range. Try a different filter.</p>
+          )}
+
+          {!loading && !error && orders.length > 0 && (
+            <>
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[#705d48] border-b border-[#ebe9e6]">
+                      <th className="py-2">Order #</th>
+                      <th className="py-2">Customer</th>
+                      <th className="py-2">Phone</th>
+                      <th className="py-2">Pickup</th>
+                      <th className="py-2">Total</th>
+                      <th className="py-2">Status</th>
+                      <th className="py-2">Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map((order) => (
+                      <tr
+                        key={order.id}
+                        onClick={() => navigate(`/admin/orders/${order.id}`)}
+                        className="border-b border-[#f1ede9] cursor-pointer hover:bg-[#faf8f6]"
+                      >
+                        <td className="py-2 font-semibold text-[#0d0f13]">{order.order_number}</td>
+                        <td className="py-2">{order.customer_name}</td>
+                        <td className="py-2">{order.customer_phone}</td>
+                        <td className="py-2">{order.pickup_label}</td>
+                        <td className="py-2">{currencyPhp(Number(order.total_amount))}</td>
+                        <td className="py-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[order.status]}`}>
+                            {order.status}
+                          </span>
+                        </td>
+                        <td className="py-2 text-xs text-[#705d48]">{formatDate(order.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="md:hidden space-y-2">
+                {orders.map((order) => (
+                  <button
+                    key={order.id}
+                    type="button"
+                    onClick={() => navigate(`/admin/orders/${order.id}`)}
+                    className="w-full text-left border border-[#ebe9e6] rounded-md p-3"
+                  >
+                    <div className="flex justify-between items-center gap-2">
+                      <p className="font-semibold text-[#0d0f13]">{order.order_number}</p>
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[order.status]}`}>
+                        {order.status}
+                      </span>
+                    </div>
+                    <p className="text-sm text-[#0d0f13] mt-1">{order.customer_name}</p>
+                    <p className="text-xs text-[#705d48]">{order.customer_phone}</p>
+                    <p className="text-xs text-[#705d48] mt-1">Pickup: {order.pickup_label}</p>
+                    <p className="text-sm font-semibold text-[#0d0f13] mt-1">{currencyPhp(Number(order.total_amount))}</p>
+                    <p className="text-xs text-[#705d48] mt-1">{formatDate(order.created_at)}</p>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+    </AdminLayout>
+  );
+}

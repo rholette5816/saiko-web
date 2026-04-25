@@ -9,7 +9,7 @@ if (!url || !anon) {
 }
 
 export const supabase = createClient(url ?? "", anon ?? "", {
-  auth: { persistSession: false },
+  auth: { persistSession: true },
 });
 
 export interface OrderRow {

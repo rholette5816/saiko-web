@@ -8,10 +8,16 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { CartProvider } from "./lib/cart";
 import { CartDrawer } from "./components/CartDrawer";
 import { CartButton } from "./components/CartButton";
+import { AdminGuard } from "./components/AdminGuard";
 import Home from "./pages/Home";
 import Menu from "./pages/Menu";
 import Checkout from "./pages/Checkout";
 import OrderConfirmed from "./pages/OrderConfirmed";
+import AdminDashboard from "./pages/admin/Dashboard";
+import AdminLogin from "./pages/admin/Login";
+import AdminOrderDetail from "./pages/admin/OrderDetail";
+import AdminOrders from "./pages/admin/Orders";
+import AdminPrintSlip from "./pages/admin/PrintSlip";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -43,6 +49,31 @@ function Router() {
         <Route path={"/menu"} component={Menu} />
         <Route path={"/checkout"} component={Checkout} />
         <Route path={"/order-confirmed"} component={OrderConfirmed} />
+        <Route path={"/admin/login"} component={AdminLogin} />
+        <Route path={"/admin"}>
+          <AdminGuard>
+            <AdminDashboard />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/orders"}>
+          <AdminGuard>
+            <AdminOrders />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/orders/:id/print"}>
+          {(params) => (
+            <AdminGuard>
+              <AdminPrintSlip id={params.id} />
+            </AdminGuard>
+          )}
+        </Route>
+        <Route path={"/admin/orders/:id"}>
+          {(params) => (
+            <AdminGuard>
+              <AdminOrderDetail id={params.id} />
+            </AdminGuard>
+          )}
+        </Route>
         <Route path={"/404"} component={NotFound} />
         {/* Final fallback route */}
         <Route component={NotFound} />
