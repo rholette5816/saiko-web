@@ -1,5 +1,6 @@
 import { MenuItem, MenuBadge } from "@/lib/menuData";
 import { Flame } from "lucide-react";
+import { AddToCartButton } from "./AddToCartButton";
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -50,10 +51,13 @@ export function MenuItemCard({ item, index = 0 }: MenuItemCardProps) {
               </p>
             )}
           </div>
-          <div className="flex-shrink-0 text-right">
+          <div className="flex-shrink-0 text-right flex flex-col items-end gap-2">
             <p className="font-poppins font-bold text-base md:text-lg text-[#ac312d]">
               ₱{item.price}
             </p>
+            <AddToCartButton
+              item={{ id: item.id, name: item.name, price: item.price, image: item.image }}
+            />
           </div>
         </div>
       </div>

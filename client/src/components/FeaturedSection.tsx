@@ -1,6 +1,7 @@
 import { menuData } from "@/lib/menuData";
 import { Link } from "wouter";
 import { Flame, Star, Sparkles, Award } from "lucide-react";
+import { AddToCartButton } from "./AddToCartButton";
 
 const badgeConfig = {
   bestseller: { label: "Best Seller", Icon: Star, className: "bg-[#ac312d] text-white" },
@@ -59,18 +60,23 @@ export function FeaturedSection() {
                 </div>
 
                 {/* Content */}
-                <div className="p-5">
+                <div className="p-5 flex flex-col">
                   <h3 className="font-poppins font-bold text-lg text-[#0d0f13] mb-1 leading-tight group-hover:text-[#ac312d] transition-colors">
                     {item.name}
                   </h3>
                   {item.description && (
-                    <p className="text-sm text-[#705d48] mb-4 leading-snug line-clamp-2">
+                    <p className="text-sm text-[#705d48] mb-3 leading-snug line-clamp-2">
                       {item.description}
                     </p>
                   )}
-                  <p className="font-poppins font-bold text-xl text-[#ac312d]">
-                    ₱{item.price}
-                  </p>
+                  <div className="flex items-center justify-between gap-3 mt-auto">
+                    <p className="font-poppins font-bold text-xl text-[#ac312d]">
+                      ₱{item.price}
+                    </p>
+                    <AddToCartButton
+                      item={{ id: item.id, name: item.name, price: item.price, image: item.image }}
+                    />
+                  </div>
                 </div>
               </article>
             );

@@ -5,8 +5,13 @@ import { Route, Switch, useLocation } from "wouter";
 import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { CartProvider } from "./lib/cart";
+import { CartDrawer } from "./components/CartDrawer";
+import { CartButton } from "./components/CartButton";
 import Home from "./pages/Home";
 import Menu from "./pages/Menu";
+import Checkout from "./pages/Checkout";
+import OrderConfirmed from "./pages/OrderConfirmed";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -36,6 +41,8 @@ function Router() {
       <Switch>
         <Route path={"/"} component={Home} />
         <Route path={"/menu"} component={Menu} />
+        <Route path={"/checkout"} component={Checkout} />
+        <Route path={"/order-confirmed"} component={OrderConfirmed} />
         <Route path={"/404"} component={NotFound} />
         {/* Final fallback route */}
         <Route component={NotFound} />
@@ -52,12 +59,14 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-      >
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <CartProvider>
+            <Toaster />
+            <Router />
+            <CartButton />
+            <CartDrawer />
+          </CartProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

@@ -1,6 +1,7 @@
 import logo from "@/assets/logo.png";
 import { Link, useLocation } from "wouter";
 import { Phone } from "lucide-react";
+import { CartIconNav } from "./CartButton";
 
 type NavLink =
   | { type: "route"; to: string; label: string; match: string }
@@ -46,12 +47,15 @@ export function TopNav() {
           })}
         </ul>
 
-        <a
-          href="tel:09178658587"
-          className="flex items-center gap-2 px-5 py-2 bg-[#ac312d] text-white font-bold text-sm rounded-lg hover:bg-[#8f2825] transition-colors uppercase tracking-wide"
-        >
-          <Phone size={16} /> Call
-        </a>
+        <div className="flex items-center gap-2">
+          <CartIconNav />
+          <a
+            href="tel:09178658587"
+            className="flex items-center gap-2 px-5 py-2 bg-[#ac312d] text-white font-bold text-sm rounded-lg hover:bg-[#8f2825] transition-colors uppercase tracking-wide"
+          >
+            <Phone size={16} /> Call
+          </a>
+        </div>
       </div>
     </nav>
   );
