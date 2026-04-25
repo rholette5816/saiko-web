@@ -3,7 +3,7 @@ import { ShoppingBag } from "lucide-react";
 
 /*
   Floating cart button. Always visible on mobile.
-  Sits above the MobileActionBar (bottom: 4.5rem).
+  Sits at the upper-right on mobile for immediate visibility.
 */
 export function CartButton() {
   const { totalQty, openDrawer } = useCart();
@@ -12,7 +12,7 @@ export function CartButton() {
     <button
       type="button"
       onClick={openDrawer}
-      className="md:hidden fixed bottom-20 right-4 z-40 flex items-center gap-2 px-5 py-3 bg-[#0d0f13] text-white rounded-full shadow-2xl hover:bg-black transition-all active:scale-95"
+      className="md:hidden fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[70] flex items-center gap-2 px-5 py-3 bg-[#0d0f13] text-white rounded-full shadow-2xl hover:bg-black transition-all active:scale-95"
       aria-label={`Open cart, ${totalQty} item${totalQty === 1 ? "" : "s"}`}
     >
       <ShoppingBag size={18} />
