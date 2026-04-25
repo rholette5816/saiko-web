@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 export default function AdminLogin() {
   const [, navigate] = useLocation();
   const { session, loading } = useAuth();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +18,7 @@ export default function AdminLogin() {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
-    const result = await signIn(email.trim(), password);
+    const result = await signIn(identifier.trim(), password);
     setSubmitting(false);
     if (result.error) {
       setError(result.error);
@@ -35,12 +35,13 @@ export default function AdminLogin() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm font-semibold text-[#0d0f13] block mb-1">Email</label>
+            <label className="text-sm font-semibold text-[#0d0f13] block mb-1">Email or Username</label>
             <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              type="text"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
               required
+              placeholder="admin or admin@saiko.com"
               className="w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#c08643]"
             />
           </div>

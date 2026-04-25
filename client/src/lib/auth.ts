@@ -2,7 +2,23 @@ import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
 
-export async function signIn(email: string, password: string): Promise<{ error: string | null }> {
+async function resolveLoginEmail(identifier: string): Promise<string | null> {
+  const value = identifier.trim();
+  if (!value) return null;
+  if (value.includes("@")) return value;
+
+  const { data, error } = await supabase.rpc("resolve_admin_email", {
+    input_username: value,
+  });
+
+  if (error || !data || typeof data !== "string") return null;
+  return data;
+}
+
+export async function signIn(identifier: string, password: string): Promise<{ error: string | null }> {
+  const email = await resolveLoginEmail(identifier);
+  if (!email) return { error: "Invalid username/email or password" };
+
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   return { error: error?.message ?? null };
 }
