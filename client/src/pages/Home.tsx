@@ -18,7 +18,12 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white pb-24 md:pb-0">
+    <div
+      className="min-h-screen bg-white pb-24 md:pb-0 no-select-content"
+      onCopy={(e) => e.preventDefault()}
+      onCut={(e) => e.preventDefault()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <a href="#featured" className="skip-link">Skip to featured dishes</a>
       <TopNav />
       <HeroSection />
