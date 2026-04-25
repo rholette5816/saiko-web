@@ -266,6 +266,15 @@
   }
 }
 
+@keyframes saiko-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
 .animate-fadeInUp    { animation: fadeInUp 0.6s ease-out; }
 .animate-slideInLeft { animation: slideInLeft 0.6s ease-out; }
 .animate-slideInRight{ animation: slideInRight 0.6s ease-out; }

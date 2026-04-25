@@ -22,6 +22,8 @@ export interface MenuCategory {
   items: MenuItem[];
 }
 
+const menuImage = (fileName: string) => `/menu-images/${encodeURIComponent(fileName)}`;
+
 export const menuData: MenuCategory[] = [
   {
     id: "featured",
@@ -42,7 +44,7 @@ export const menuData: MenuCategory[] = [
       { id: "p1", name: "Creamy Spinach Salmon", price: 482 },
       { id: "p2", name: "Creamy Wasabe Salmon", price: 392 },
       { id: "p3", name: "Kane & Tuna", price: 482 },
-      { id: "p4", name: "Beef Misono", price: 359 },
+      { id: "p4", name: "Beef Misono", price: 359, image: menuImage("Beef Misono Pizza.png") },
       { id: "p5", name: "Seafood", price: 336 },
     ],
   },
@@ -62,8 +64,8 @@ export const menuData: MenuCategory[] = [
     name: "DORIA MEAL",
     emoji: "🍛",
     items: [
-      { id: "d1", name: "Chicken or Shrimp", price: 269 },
-      { id: "d2", name: "Seafood", price: 269 },
+      { id: "d1", name: "Chicken or Shrimp", price: 269, image: menuImage("Cheesy Parmesan Chicken.png") },
+      { id: "d2", name: "Seafood", price: 269, image: menuImage("Seafood Doria.png") },
       { id: "d3", name: "Beef", price: 247 },
     ],
   },
@@ -121,9 +123,9 @@ export const menuData: MenuCategory[] = [
       { id: "do1", name: "Ebi Don", price: 247 },
       { id: "do2", name: "Tendon", price: 236 },
       { id: "do3", name: "Katsudon", price: 269 },
-      { id: "do4", name: "Gyodon", price: 280 },
+      { id: "do4", name: "Gyodon", price: 280, image: menuImage("GYODON.png") },
       { id: "do5", name: "Uyakodon", price: 225 },
-      { id: "do6", name: "Toridon", price: 208 },
+      { id: "do6", name: "Toridon", price: 208, image: menuImage("Toridon.png") },
       { id: "do7", name: "Katsu Curry", price: 320 },
     ],
   },
@@ -133,8 +135,8 @@ export const menuData: MenuCategory[] = [
     emoji: "🍳",
     items: [
       { id: "t1", name: "Wagyu Teppan", price: 504 },
-      { id: "t2", name: "Seafood Teppan", price: 325 },
-      { id: "t3", name: "Chicken Teppan", price: 280 },
+      { id: "t2", name: "Seafood Teppan", price: 325, image: menuImage("Seafood Teppan.png") },
+      { id: "t3", name: "Chicken Teppan", price: 280, image: menuImage("Chicken Teppan.png") },
       { id: "t4", name: "Okonomiyaki", price: 280 },
     ],
   },
@@ -161,7 +163,7 @@ export const menuData: MenuCategory[] = [
       { id: "sa3", name: "Pomelo Salad", price: 292 },
       { id: "sa4", name: "Pokebowl - Tuna & Salmon Poke", price: 325 },
       { id: "sa5", name: "Pokebowl - Poke Salmon", price: 292 },
-      { id: "sa6", name: "Pokebowl - Poke Tuna", price: 280 },
+      { id: "sa6", name: "Pokebowl - Poke Tuna", price: 280, image: menuImage("Tuna Poke Salad.png") },
     ],
   },
   {
@@ -174,7 +176,7 @@ export const menuData: MenuCategory[] = [
       { id: "fr3", name: "Wagyu", price: 269 },
       { id: "fr4", name: "Seafood", price: 236 },
       { id: "fr5", name: "Umo Rice Chahan", price: 185 },
-      { id: "fr6", name: "Gyu Yaki Meshe", price: 180 },
+      { id: "fr6", name: "Gyu Yaki Meshe", price: 180, image: menuImage("Gyuniku.png") },
       { id: "fr7", name: "Kimuchi", price: 180 },
       { id: "fr8", name: "Chahan", price: 168 },
     ],
@@ -187,7 +189,7 @@ export const menuData: MenuCategory[] = [
       { id: "y1", name: "Wagyu", price: 437 },
       { id: "y2", name: "Seafood", price: 292 },
       { id: "y3", name: "Pork", price: 280 },
-      { id: "y4", name: "Chicken", price: 280 },
+      { id: "y4", name: "Chicken", price: 280, image: menuImage("Chicekn Yakitori.png") },
     ],
   },
   {
@@ -201,7 +203,7 @@ export const menuData: MenuCategory[] = [
       { id: "su3", name: "Regular Maki - Maki Roll", price: 191 },
       // Sashimi
       { id: "su4", name: "Sashimi - Salmon", price: 432 },
-      { id: "su5", name: "Sashimi - Tuna", price: 336 },
+      { id: "su5", name: "Sashimi - Tuna", price: 336, image: menuImage("Tuna Sashimi.png") },
       // Uramaki
       { id: "su6", name: "Uramaki - Spicy Cheesy Salmon", price: 392 },
       { id: "su7", name: "Uramaki - Dragon Roll", price: 325 },
@@ -222,7 +224,7 @@ export const menuData: MenuCategory[] = [
       { id: "sf1", name: "Gomoko Yakisoba", price: 370 },
       { id: "sf2", name: "Katayakisoba", price: 359 },
       { id: "sf3", name: "Yakisoba", price: 359 },
-      { id: "sf4", name: "Yaki Udon", price: 437 },
+      { id: "sf4", name: "Yaki Udon", price: 437, image: menuImage("Yaki Udon.png") },
     ],
   },
   {
@@ -232,7 +234,7 @@ export const menuData: MenuCategory[] = [
     items: [
       { id: "r1", name: "Wagyu Ramen", price: 415 },
       { id: "r2", name: "Curry Ramen", price: 381 },
-      { id: "r3", name: "Devil Ramen", price: 359 },
+      { id: "r3", name: "Devil Ramen", price: 359, image: menuImage("Devil Ramen.png") },
       { id: "r4", name: "Butao Ramen", price: 359 },
       { id: "r5", name: "Sukiyaki Ramen", price: 359 },
       { id: "r6", name: "Karubi Ramen", price: 488 },
@@ -243,7 +245,7 @@ export const menuData: MenuCategory[] = [
       { id: "r11", name: "Ebi Tonkotso Ramen", price: 336 },
       { id: "r12", name: "Chasu Ramen", price: 325 },
       { id: "r13", name: "Tonkotso Ramen", price: 336 },
-      { id: "r14", name: "Salted Egg Ramen", price: 336 },
+      { id: "r14", name: "Salted Egg Ramen", price: 336, image: menuImage("salted egg ramen.png") },
     ],
   },
   {
@@ -253,7 +255,7 @@ export const menuData: MenuCategory[] = [
     items: [
       { id: "a1", name: "Mix Fry", price: 376 },
       { id: "a2", name: "Shoyo Chicken", price: 448 },
-      { id: "a3", name: "Ebi Cheesey Tempura", price: 308 },
+      { id: "a3", name: "Ebi Cheesey Tempura", price: 308, image: menuImage("Ebi Cheesy Tempura.png") },
       { id: "a4", name: "Tonkatsu with Cheese", price: 303 },
       { id: "a5", name: "Ebi Tempura", price: 280 },
       { id: "a6", name: "Ebi Furai", price: 280 },

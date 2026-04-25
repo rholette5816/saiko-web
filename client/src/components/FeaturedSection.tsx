@@ -1,7 +1,6 @@
 import { menuData } from "@/lib/menuData";
+import { Award, Flame, Sparkles, Star } from "lucide-react";
 import { Link } from "wouter";
-import { Flame, Star, Sparkles, Award } from "lucide-react";
-import { AddToCartButton } from "./AddToCartButton";
 
 const badgeConfig = {
   bestseller: { label: "Best Seller", Icon: Star, className: "bg-[#ac312d] text-white" },
@@ -11,10 +10,21 @@ const badgeConfig = {
 } as const;
 
 export function FeaturedSection() {
-  const featured = menuData.find((c) => c.id === "featured")?.items.slice(0, 4) ?? [];
+  const allImageItems = menuData
+    .filter((category) => category.id !== "featured")
+    .flatMap((category) =>
+      category.items
+        .filter((item) => Boolean(item.image))
+        .map((item) => ({ ...item, categoryName: category.name })),
+    );
+
+  const featured = Array.from(
+    new Map(allImageItems.map((item) => [item.name.toLowerCase(), item])).values(),
+  );
+  const loopedItems = featured.length > 1 ? [...featured, ...featured] : featured;
 
   return (
-    <section id="featured" className="py-16 md:py-24 bg-white">
+    <section id="featured" className="py-16 md:py-24 bg-white overflow-hidden">
       <div className="container">
         <div className="text-center mb-12 md:mb-16">
           <p className="text-xs md:text-sm uppercase tracking-widest text-[#ac312d] font-bold mb-2">
@@ -24,76 +34,75 @@ export function FeaturedSection() {
             Featured
           </h2>
           <p className="text-lg text-[#705d48] max-w-2xl mx-auto mb-6">
-            The four dishes our regulars order every single time. Try them once and you'll understand why.
+            Browse the dish photos here, then order inside the full menu.
           </p>
           <div className="h-1 w-24 bg-gradient-to-r from-[#e88627] via-[#c08643] to-[#ac312d] rounded-full mx-auto" />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6 mb-10">
-          {featured.map((item, index) => {
-            const badge = item.badge ? badgeConfig[item.badge] : null;
-            return (
-              <article
-                key={item.id}
-                className="group relative bg-white rounded-2xl overflow-hidden border border-[#ebe9e6] hover:border-[#c08643]/60 hover:shadow-xl transition-all duration-300"
-                style={{ animation: `fadeInUp 0.5s ease-out ${index * 0.1}s backwards` }}
-              >
-                {/* Image */}
-                <div className="relative aspect-[4/3] bg-gradient-to-br from-[#ebe9e6] via-[#f5f4f2] to-[#ebe9e6] flex items-center justify-center overflow-hidden">
-                  {item.image ? (
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <span className="text-7xl opacity-60">🍜</span>
-                  )}
-                  {badge && (
-                    <span className={`absolute top-3 left-3 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full shadow-md ${badge.className}`}>
-                      <badge.Icon size={11} />
-                      {badge.label}
-                    </span>
-                  )}
-                </div>
+        <div className="relative mb-10 overflow-hidden">
+          <div className="absolute inset-y-0 left-0 w-8 md:w-16 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+          <div className="absolute inset-y-0 right-0 w-8 md:w-16 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
 
-                {/* Content */}
-                <div className="p-5 flex flex-col">
-                  <h3 className="font-poppins font-bold text-lg text-[#0d0f13] mb-1 leading-tight group-hover:text-[#ac312d] transition-colors">
-                    {item.name}
-                  </h3>
-                  {item.description && (
-                    <p className="text-sm text-[#705d48] mb-3 leading-snug line-clamp-2">
-                      {item.description}
-                    </p>
-                  )}
-                  <div className="flex items-center justify-between gap-3 mt-auto">
-                    <p className="font-poppins font-bold text-xl text-[#ac312d]">
-                      ₱{item.price}
-                    </p>
-                    <AddToCartButton
-                      item={{ id: item.id, name: item.name, price: item.price, image: item.image }}
-                    />
+          <div
+            className={`flex w-max gap-4 md:gap-6 ${
+              featured.length > 1
+                ? "animate-[saiko-marquee_72s_linear_infinite] hover:[animation-play-state:paused]"
+                : ""
+            }`}
+          >
+            {loopedItems.map((item, index) => {
+              const badge = item.badge ? badgeConfig[item.badge] : null;
+              return (
+                <article
+                  key={`${item.id}-${index}`}
+                  className="group relative min-w-[235px] max-w-[235px] md:min-w-[280px] md:max-w-[280px] bg-white rounded-xl overflow-hidden border border-[#ebe9e6] hover:border-[#c08643]/60 hover:shadow-xl transition-all duration-300"
+                >
+                  <div className="relative aspect-[4/3] bg-gradient-to-br from-[#ebe9e6] via-[#f5f4f2] to-[#ebe9e6] flex items-center justify-center overflow-hidden">
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <span className="text-6xl opacity-60">?</span>
+                    )}
+                    {badge && (
+                      <span className={`absolute top-3 left-3 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full shadow-md ${badge.className}`}>
+                        <badge.Icon size={11} />
+                        {badge.label}
+                      </span>
+                    )}
                   </div>
-                </div>
-              </article>
-            );
-          })}
+
+                  <div className="p-4 flex flex-col gap-1">
+                    <h3 className="font-poppins font-bold text-base md:text-lg text-[#0d0f13] leading-tight group-hover:text-[#ac312d] transition-colors">
+                      {item.name}
+                    </h3>
+                    <p className="text-[11px] uppercase tracking-wider text-[#705d48] line-clamp-1">
+                      {item.categoryName}
+                    </p>
+                    <p className="font-poppins font-bold text-lg text-[#ac312d]">
+                      PHP {item.price}
+                    </p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </div>
 
-        {/* CTA */}
         <div className="text-center">
           <p className="text-[#705d48] mb-5 text-sm md:text-base">
-            Plus {menuData.reduce((n, c) => n + c.items.length, 0) - 4}+ more dishes across{" "}
-            {menuData.length} categories
+            Add to cart is available on the menu page.
           </p>
           <Link
             href="/menu"
             className="inline-flex items-center gap-2 px-8 py-4 bg-[#0d0f13] text-white font-poppins font-bold rounded-lg hover:bg-black hover:shadow-lg transition-all duration-200 uppercase tracking-wide"
           >
-            View Full Menu →
+            View Full Menu
           </Link>
         </div>
       </div>
