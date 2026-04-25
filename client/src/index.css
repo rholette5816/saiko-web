@@ -299,11 +299,11 @@
 
 html { scroll-behavior: smooth; }
 
-button {
+.btn-shine {
   position: relative;
   overflow: hidden;
 }
-button::before {
+.btn-shine::before {
   content: '';
   position: absolute;
   top: 0;
@@ -313,7 +313,7 @@ button::before {
   background: rgba(255, 255, 255, 0.15);
   transition: left 0.3s ease;
 }
-button:hover::before { left: 100%; }
+.btn-shine:hover::before { left: 100%; }
 
 .card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .card-hover:hover {
