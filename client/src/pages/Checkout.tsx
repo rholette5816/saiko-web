@@ -3,13 +3,10 @@ import { TopNav } from "@/components/TopNav";
 import { useCart } from "@/lib/cart";
 import { getPickupOptions, type PickupSlot } from "@/lib/pickupSlots";
 import { formatOrderText } from "@/lib/orderFormat";
+import { supabase } from "@/lib/supabase";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { MessageCircle, Mail, AlertCircle, ChevronLeft } from "lucide-react";
-
-type SendMethod = "messenger" | "email";
-
-const FORMSPREE_ENDPOINT = "https://formspree.io/f/alphrickfoodventuresinc@gmail.com";
+import { AlertCircle, ChevronLeft } from "lucide-react";
 
 export default function Checkout() {
   const cart = useCart();
@@ -23,7 +20,6 @@ export default function Checkout() {
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [pickupValue, setPickupValue] = useState<string>("asap");
-  const [method, setMethod] = useState<SendMethod>("messenger");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,40 +54,67 @@ export default function Checkout() {
       notes: notes.trim() || undefined,
     });
 
+    const orderItems = cart.items.map((item) => ({
+      item_id: item.id,
+      item_name: item.name,
+      unit_price: item.price,
+      quantity: item.quantity,
+      line_total: item.price * item.quantity,
+    }));
+
     try {
-      if (method === "email") {
-        const res = await fetch(FORMSPREE_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            subject: `Saiko Pickup Order - ${name.trim()} (${selectedSlot.label})`,
-            order: orderText,
-            customer_name: name.trim(),
-            customer_phone: phone.trim(),
-            pickup: selectedSlot.label,
-            notes: notes.trim(),
-          }),
-        });
-        if (!res.ok) throw new Error("Email send failed");
+      const { data: orderRow, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          customer_name: name.trim(),
+          customer_phone: phone.trim(),
+          pickup_label: selectedSlot.label,
+          pickup_time: selectedSlot.date.toISOString(),
+          is_pre_order: selectedSlot.isTomorrow ?? false,
+          notes: notes.trim() || null,
+          total_amount: cart.totalPrice,
+        })
+        .select("id, order_number")
+        .single();
+
+      if (orderError || !orderRow) {
+        setError("Something went wrong. Try again or call us directly.");
+        setSubmitting(false);
+        return;
+      }
+
+      const { error: itemsError } = await supabase.from("order_items").insert(
+        orderItems.map((item) => ({
+          ...item,
+          order_id: orderRow.id,
+        })),
+      );
+
+      if (itemsError) {
+        await supabase.from("orders").delete().eq("id", orderRow.id);
+        setError("Something went wrong. Try again or call us directly.");
+        setSubmitting(false);
+        return;
       }
 
       // Stash for confirmation page.
       sessionStorage.setItem(
         "saiko-last-order",
         JSON.stringify({
+          orderNumber: orderRow.order_number,
           orderText,
-          method,
           name: name.trim(),
           phone: phone.trim(),
           pickup: selectedSlot.label,
           isTomorrow: !!selectedSlot.isTomorrow,
+          total: cart.totalPrice,
         }),
       );
 
       cart.clear();
       navigate("/order-confirmed");
     } catch {
-      setError("Something went wrong. Try the other send method or call us directly.");
+      setError("Something went wrong. Try again or call us directly.");
       setSubmitting(false);
     }
   }
@@ -209,39 +232,9 @@ export default function Checkout() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-bold uppercase tracking-wide text-[#0d0f13] mb-2">
-                  How should we receive your order?
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setMethod("messenger")}
-                    className={`flex flex-col items-center gap-1 p-4 rounded-lg border-2 transition-all ${
-                      method === "messenger"
-                        ? "border-[#ac312d] bg-[#ac312d]/5"
-                        : "border-[#ebe9e6] hover:border-[#c08643]"
-                    }`}
-                  >
-                    <MessageCircle size={22} className={method === "messenger" ? "text-[#ac312d]" : "text-[#705d48]"} />
-                    <span className="font-bold text-sm uppercase tracking-wide text-[#0d0f13]">Messenger</span>
-                    <span className="text-xs text-[#705d48]">Recommended</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMethod("email")}
-                    className={`flex flex-col items-center gap-1 p-4 rounded-lg border-2 transition-all ${
-                      method === "email"
-                        ? "border-[#ac312d] bg-[#ac312d]/5"
-                        : "border-[#ebe9e6] hover:border-[#c08643]"
-                    }`}
-                  >
-                    <Mail size={22} className={method === "email" ? "text-[#ac312d]" : "text-[#705d48]"} />
-                    <span className="font-bold text-sm uppercase tracking-wide text-[#0d0f13]">Email</span>
-                    <span className="text-xs text-[#705d48]">Backup</span>
-                  </button>
-                </div>
-              </div>
+              <p className="text-xs text-[#705d48]">
+                Your order will be sent to our Messenger right after you tap Place Order. Confirm pickup details there.
+              </p>
 
               {error && (
                 <p className="text-sm text-[#ac312d] font-medium">{error}</p>
