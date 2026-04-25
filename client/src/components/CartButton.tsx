@@ -7,18 +7,19 @@ import { ShoppingBag } from "lucide-react";
 */
 export function CartButton() {
   const { totalQty, openDrawer } = useCart();
+  const hasItems = totalQty > 0;
 
   return (
     <button
       type="button"
       onClick={openDrawer}
-      className="md:hidden fixed right-4 top-4 z-50 flex items-center gap-2 px-5 py-3 bg-[#0d0f13] text-white rounded-full shadow-2xl hover:bg-black transition-all active:scale-95"
-      style={{ top: "calc(env(safe-area-inset-top) + 1rem)" }}
-      aria-label={`Open cart, ${totalQty} item${totalQty === 1 ? "" : "s"}`}
+      className={`md:hidden fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[70] bg-[#0d0f13] text-white rounded-full shadow-2xl hover:bg-black transition-all active:scale-95 ${
+        hasItems ? "flex items-center justify-center gap-1.5 h-11 min-w-14 px-2.5" : "w-11 h-11 flex items-center justify-center"
+      }`}
+      aria-label={hasItems ? `Open cart, ${totalQty} item${totalQty === 1 ? "" : "s"}` : "Open cart"}
     >
       <ShoppingBag size={18} />
-      <span className="font-bold text-sm uppercase tracking-wide">Cart</span>
-      {totalQty > 0 && (
+      {hasItems && (
         <span className="bg-[#ac312d] text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
           {totalQty}
         </span>

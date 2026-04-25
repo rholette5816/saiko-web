@@ -39,7 +39,7 @@ export default function Menu() {
   const categoriesForNav = filteredMenu.length ? filteredMenu : menuData;
 
   return (
-    <div className="min-h-screen bg-white pb-16 md:pb-0">
+    <div className="min-h-screen bg-white pb-24 md:pb-0">
       <a href="#menu-top" className="skip-link">Skip to menu</a>
       <TopNav />
 

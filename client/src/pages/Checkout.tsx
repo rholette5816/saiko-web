@@ -97,7 +97,7 @@ export default function Checkout() {
   }
 
   return (
-    <div className="min-h-screen bg-[#ebe9e6] pb-16 md:pb-0">
+    <div className="min-h-screen bg-[#ebe9e6] pb-24 md:pb-0">
       <TopNav />
 
       <div className="container py-8 md:py-12 max-w-3xl">

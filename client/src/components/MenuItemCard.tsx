@@ -51,7 +51,7 @@ export function MenuItemCard({ item, index = 0 }: MenuItemCardProps) {
               </p>
             )}
           </div>
-          <div className="flex-shrink-0 text-right flex flex-col items-end gap-2">
+          <div className="flex-shrink-0 text-right flex flex-col items-end gap-2 min-w-[96px]">
             <p className="font-poppins font-bold text-base md:text-lg text-[#ac312d]">
               ₱{item.price}
             </p>

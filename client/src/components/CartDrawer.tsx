@@ -135,7 +135,7 @@ export function CartDrawer() {
 
         {/* Footer */}
         {items.length > 0 && (
-          <div className="border-t border-[#ebe9e6] p-5 bg-[#ebe9e6]/30 space-y-3">
+          <div className="border-t border-[#ebe9e6] px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-[#ebe9e6]/30 space-y-3">
             <div className="flex items-baseline justify-between">
               <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">
                 Subtotal

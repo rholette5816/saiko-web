@@ -187,6 +187,10 @@
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
   @media (min-width: 640px) {
     .container {
       padding-left: 1.5rem;
