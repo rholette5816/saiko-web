@@ -28,3 +28,76 @@ apikey: <service_role_key>
 
 Use service_role for this lookup so RLS doesn't block it. Keep that key
 in Botcake's secrets, never in the web bundle.
+
+## Edge Functions (Botcake-friendly API)
+
+To keep the `service_role` key inside Supabase and make Botcake calls simple,
+use these two Edge Functions:
+
+- `GET https://wiutixrypqrlfbandjox.supabase.co/functions/v1/get-order?ref=SAIKO-XXXX`
+- `POST https://wiutixrypqrlfbandjox.supabase.co/functions/v1/update-order-status`
+
+Required header for both:
+
+```
+x-api-key: <BOTCAKE_API_KEY>
+```
+
+### `get-order` request and response
+
+Request:
+
+```
+GET /functions/v1/get-order?ref=SAIKO-0001
+```
+
+Response (`200`):
+
+```json
+{
+  "order_number": "SAIKO-0001",
+  "customer_name": "Juan Dela Cruz",
+  "phone": "09171234567",
+  "pickup": "Today, 6:30 PM",
+  "pickup_time": "2026-04-25T18:30:00Z",
+  "is_pre_order": false,
+  "status": "pending",
+  "total": 1250,
+  "notes": "No spicy",
+  "items": [
+    { "name": "Wagyu Teppan", "qty": 2, "price": 504, "subtotal": 1008 },
+    { "name": "Pork Gyoza", "qty": 3, "price": 157, "subtotal": 471 }
+  ],
+  "created_at": "2026-04-25T15:24:11Z"
+}
+```
+
+### `update-order-status` request and response
+
+Request:
+
+```json
+POST /functions/v1/update-order-status
+{
+  "ref": "SAIKO-0001",
+  "status": "preparing"
+}
+```
+
+Response (`200`):
+
+```json
+{
+  "order_number": "SAIKO-0001",
+  "status": "preparing",
+  "updated_at": "2026-04-25T16:05:00Z"
+}
+```
+
+Allowed status values: `pending`, `preparing`, `ready`, `completed`, `cancelled`.
+
+### Dashboard deploy steps
+
+1. Supabase Dashboard -> Edge Functions -> New function -> name it `get-order` -> paste contents of `supabase/functions/get-order/index.ts` -> Deploy.
+2. Repeat for `update-order-status` using `supabase/functions/update-order-status/index.ts`.
+3. Supabase Dashboard -> Edge Functions -> Secrets -> add `BOTCAKE_API_KEY` (set the value separately and never commit it).
