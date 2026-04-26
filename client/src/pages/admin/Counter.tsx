@@ -325,11 +325,15 @@ export default function AdminCounter() {
 
   function renderOrderPanel(isMobile: boolean) {
     return (
-      <div className={`bg-white rounded-xl border border-[#d8d2cb] ${isMobile ? "p-4" : "p-5"}`}>
+      <div
+        className={`bg-white rounded-xl border border-[#d8d2cb] ${
+          isMobile ? "p-4" : "p-3 md:h-full md:min-h-0 md:overflow-y-auto"
+        }`}
+      >
         <h2 className="text-base font-bold text-[#0d0f13] uppercase tracking-wide">Current Order</h2>
         <p className="text-xs text-[#705d48] mt-1">{orderItems.length} line items</p>
 
-        <div className="mt-3 max-h-[34vh] overflow-y-auto space-y-2 pr-1">
+        <div className="mt-2 max-h-[26vh] md:max-h-[27vh] overflow-y-auto space-y-2 pr-1">
           {orderItems.length === 0 ? (
             <p className="text-sm text-[#705d48] py-3">Tap menu items to start.</p>
           ) : (
@@ -373,35 +377,37 @@ export default function AdminCounter() {
           )}
         </div>
 
-        <div className="mt-4 space-y-3">
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Customer Name</label>
-            <input
-              type="text"
-              value={customerName}
-              onChange={(event) => setCustomerName(event.target.value)}
-              placeholder="Walk-in"
-              className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Customer Phone</label>
-            <input
-              type="text"
-              value={customerPhone}
-              onChange={(event) => setCustomerPhone(event.target.value)}
-              placeholder="Optional"
-              className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm"
-            />
+        <div className="mt-3 space-y-2">
+          <div className={`${isMobile ? "space-y-2" : "grid grid-cols-2 gap-2"}`}>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Customer Name</label>
+              <input
+                type="text"
+                value={customerName}
+                onChange={(event) => setCustomerName(event.target.value)}
+                placeholder="Walk-in"
+                className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-2.5 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Customer Phone</label>
+              <input
+                type="text"
+                value={customerPhone}
+                onChange={(event) => setCustomerPhone(event.target.value)}
+                placeholder="Optional"
+                className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-2.5 py-2 text-sm"
+              />
+            </div>
           </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Notes</label>
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              rows={2}
+              rows={1}
               placeholder="Optional notes"
-              className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm resize-none"
+              className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-2.5 py-2 text-sm resize-none"
             />
           </div>
 
@@ -444,7 +450,7 @@ export default function AdminCounter() {
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[#705d48] mb-1.5">Payment Method</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               {(["cash", "gcash", "card"] as PaymentMethod[]).map((method) => (
                 <label
                   key={method}
@@ -478,7 +484,7 @@ export default function AdminCounter() {
                 value={cashReceived}
                 onChange={(event) => setCashReceived(event.target.value)}
                 placeholder="0.00"
-                className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm"
+                className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-2.5 py-2 text-sm"
               />
             </div>
           )}
@@ -533,19 +539,19 @@ export default function AdminCounter() {
 
         {error && <p className="mt-3 text-sm text-[#ac312d] font-semibold">{error}</p>}
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!orderItems.length || submitting || settingsLoading}
-            className="h-12 rounded-lg bg-[#ac312d] text-white font-bold uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-10 rounded-lg bg-[#ac312d] text-white font-bold uppercase tracking-wide text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? "Submitting..." : "Submit & Print"}
           </button>
           <button
             type="button"
             onClick={() => resetForm(true)}
-            className="h-12 rounded-lg border border-[#0d0f13] text-[#0d0f13] font-semibold uppercase tracking-wide text-sm"
+            className="h-10 rounded-lg border border-[#0d0f13] text-[#0d0f13] font-semibold uppercase tracking-wide text-xs md:text-sm"
           >
             Cancel / Reset
           </button>
@@ -556,7 +562,7 @@ export default function AdminCounter() {
 
   return (
     <AdminLayout>
-      <section className="space-y-4">
+      <section className="space-y-3 md:h-[calc(100vh-10.5rem)] md:overflow-hidden">
         <style>{`
           .print-receipt-root { display: none; }
           @media print {
@@ -565,7 +571,7 @@ export default function AdminCounter() {
           }
         `}</style>
 
-        <div className="counter-screen">
+        <div className="counter-screen md:h-full md:flex md:flex-col">
           <div className="mb-2">
             <h1 className="text-2xl font-bold text-[#0d0f13]">Counter Mode</h1>
             <p className="text-sm text-[#705d48]">Walk-in order entry, VAT/Senior handling, and receipt printing.</p>
@@ -601,8 +607,8 @@ export default function AdminCounter() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-4">
-            <div className="bg-white rounded-xl border border-[#d8d2cb] p-4 md:p-5">
+          <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-3 md:flex-1 md:min-h-0">
+            <div className="bg-white rounded-xl border border-[#d8d2cb] p-3 md:p-4 md:h-full md:min-h-0 md:flex md:flex-col">
               <div className="flex flex-col gap-3">
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {categories.map((category) => (
@@ -632,32 +638,32 @@ export default function AdminCounter() {
                 </label>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[68vh] overflow-y-auto pr-1">
+              <div className="mt-3 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 md:flex-1 md:min-h-0 overflow-y-auto pr-1">
                 {filteredItems.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => addToOrder(item)}
-                    className="bg-white border border-[#ebe9e6] rounded-lg p-3 text-left min-h-[130px] hover:border-[#c08643] transition-colors"
+                    className="bg-white border border-[#ebe9e6] rounded-lg p-2.5 text-left min-h-[108px] md:min-h-[100px] hover:border-[#c08643] transition-colors"
                   >
                     {item.image ? (
                       <img
                         src={item.image}
                         alt={item.name}
-                        className="h-14 w-full rounded-md object-cover mb-2"
+                        className="h-12 w-full rounded-md object-cover mb-1.5"
                         loading="lazy"
                       />
                     ) : (
-                      <div className="h-14 w-full rounded-md bg-[#f6f2ed] mb-2" />
+                      <div className="h-12 w-full rounded-md bg-[#f6f2ed] mb-1.5" />
                     )}
-                    <p className="text-sm font-semibold text-[#0d0f13] leading-tight line-clamp-2">{item.name}</p>
-                    <p className="text-sm font-bold text-[#ac312d] mt-1">{currencyPhp(item.price)}</p>
+                    <p className="text-xs md:text-sm font-semibold text-[#0d0f13] leading-tight line-clamp-2">{item.name}</p>
+                    <p className="text-xs md:text-sm font-bold text-[#ac312d] mt-1">{currencyPhp(item.price)}</p>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="hidden md:block">{renderOrderPanel(false)}</div>
+            <div className="hidden md:block md:h-full md:min-h-0">{renderOrderPanel(false)}</div>
           </div>
 
           <div className="md:hidden">
