@@ -2,9 +2,18 @@ import { useCart } from "@/lib/cart";
 import { Link } from "wouter";
 import { X, Plus, Minus, Trash2, ShoppingBag } from "lucide-react";
 import { useEffect } from "react";
+import { useLocation } from "wouter";
 
 export function CartDrawer() {
+  const [location] = useLocation();
   const { items, totalPrice, totalQty, isOpen, closeDrawer, setQty, remove } = useCart();
+  const showCartUi = location.startsWith("/menu");
+
+  useEffect(() => {
+    if (!showCartUi && isOpen) {
+      closeDrawer();
+    }
+  }, [showCartUi, isOpen, closeDrawer]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -19,7 +28,7 @@ export function CartDrawer() {
     };
   }, [isOpen, closeDrawer]);
 
-  if (!isOpen) return null;
+  if (!showCartUi || !isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Cart">

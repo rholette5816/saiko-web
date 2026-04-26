@@ -1,27 +1,55 @@
 import { menuData } from "@/lib/menuData";
-import { Award, Flame, Sparkles, Star } from "lucide-react";
+import { useCallback, useEffect, useRef } from "react";
 import { Link } from "wouter";
 
-const badgeConfig = {
-  bestseller: { label: "Best Seller", Icon: Star, className: "bg-[#ac312d] text-white" },
-  "chefs-pick": { label: "Chef's Pick", Icon: Award, className: "bg-[#0d0f13] text-[#c08643]" },
-  new: { label: "New", Icon: Sparkles, className: "bg-[#c08643] text-white" },
-  spicy: { label: "Spicy", Icon: Flame, className: "bg-[#e88627] text-white" },
-} as const;
-
 export function FeaturedSection() {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const pauseUntilRef = useRef(0);
+
+  const pauseAutoScroll = useCallback((ms = 3500) => {
+    pauseUntilRef.current = performance.now() + ms;
+  }, []);
+
   const allImageItems = menuData
     .filter((category) => category.id !== "featured")
     .flatMap((category) =>
-      category.items
-        .filter((item) => Boolean(item.image))
-        .map((item) => ({ ...item, categoryName: category.name })),
+      category.items.filter((item) => Boolean(item.image)),
     );
 
   const featured = Array.from(
     new Map(allImageItems.map((item) => [item.name.toLowerCase(), item])).values(),
   );
   const loopedItems = featured.length > 1 ? [...featured, ...featured] : featured;
+  const hasLoop = featured.length > 1;
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !hasLoop) return;
+
+    let frame = 0;
+    let lastTime = performance.now();
+    const speedPxPerSecond = 22;
+
+    const tick = (time: number) => {
+      const delta = time - lastTime;
+      lastTime = time;
+
+      if (time >= pauseUntilRef.current) {
+        const halfWidth = scroller.scrollWidth / 2;
+        if (halfWidth > 0) {
+          scroller.scrollLeft += (speedPxPerSecond * delta) / 1000;
+          if (scroller.scrollLeft >= halfWidth) {
+            scroller.scrollLeft -= halfWidth;
+          }
+        }
+      }
+
+      frame = window.requestAnimationFrame(tick);
+    };
+
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [hasLoop]);
 
   return (
     <section id="featured" className="py-16 md:py-24 bg-white overflow-hidden">
@@ -44,20 +72,19 @@ export function FeaturedSection() {
           <div className="absolute inset-y-0 right-0 w-8 md:w-16 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
 
           <div
-            className={`flex w-max gap-4 md:gap-6 ${
-              featured.length > 1
-                ? "animate-[saiko-marquee_72s_linear_infinite] hover:[animation-play-state:paused]"
-                : ""
-            }`}
+            ref={scrollerRef}
+            onPointerDown={() => pauseAutoScroll(5000)}
+            onTouchStart={() => pauseAutoScroll(5000)}
+            onScroll={() => pauseAutoScroll(1800)}
+            className="overflow-x-auto overflow-y-hidden snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden touch-pan-x"
           >
-            {loopedItems.map((item, index) => {
-              const badge = item.badge ? badgeConfig[item.badge] : null;
-              return (
+            <div className="flex w-max gap-4 md:gap-6 px-2 md:px-4">
+              {loopedItems.map((item, index) => (
                 <article
                   key={`${item.id}-${index}`}
-                  className="group relative min-w-[235px] max-w-[235px] md:min-w-[280px] md:max-w-[280px] bg-white rounded-xl overflow-hidden border border-[#ebe9e6] hover:border-[#c08643]/60 hover:shadow-xl transition-all duration-300"
+                  className="group relative snap-start min-w-[280px] max-w-[280px] md:min-w-[360px] md:max-w-[360px] bg-white rounded-xl overflow-hidden border border-[#ebe9e6] hover:border-[#c08643]/60 hover:shadow-xl transition-all duration-300"
                 >
-                  <div className="relative aspect-[4/3] bg-gradient-to-br from-[#ebe9e6] via-[#f5f4f2] to-[#ebe9e6] flex items-center justify-center overflow-hidden">
+                  <div className="relative aspect-[5/4] bg-gradient-to-br from-[#ebe9e6] via-[#f5f4f2] to-[#ebe9e6] flex items-center justify-center overflow-hidden">
                     {item.image ? (
                       <img
                         src={item.image}
@@ -69,34 +96,16 @@ export function FeaturedSection() {
                     ) : (
                       <span className="text-6xl opacity-60">?</span>
                     )}
-                    {badge && (
-                      <span className={`absolute top-3 left-3 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full shadow-md ${badge.className}`}>
-                        <badge.Icon size={11} />
-                        {badge.label}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="p-4 flex flex-col gap-1">
-                    <h3 className="font-poppins font-bold text-base md:text-lg text-[#0d0f13] leading-tight group-hover:text-[#ac312d] transition-colors">
-                      {item.name}
-                    </h3>
-                    <p className="text-[11px] uppercase tracking-wider text-[#705d48] line-clamp-1">
-                      {item.categoryName}
-                    </p>
-                    <p className="font-poppins font-bold text-lg text-[#ac312d]">
-                      PHP {item.price}
-                    </p>
                   </div>
                 </article>
-              );
-            })}
+              ))}
+            </div>
           </div>
         </div>
 
         <div className="text-center">
           <p className="text-[#705d48] mb-5 text-sm md:text-base">
-            Add to cart is available on the menu page.
+            To make an order, please go to the full menu.
           </p>
           <Link
             href="/menu"

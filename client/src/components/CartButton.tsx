@@ -1,13 +1,18 @@
 import { useCart } from "@/lib/cart";
 import { ShoppingBag } from "lucide-react";
+import { useLocation } from "wouter";
 
 /*
-  Floating cart button. Always visible on mobile.
-  Sits at the upper-right on mobile for immediate visibility.
+  Floating cart button.
+  Only visible on the Menu page.
 */
 export function CartButton() {
+  const [location] = useLocation();
   const { totalQty, openDrawer } = useCart();
   const hasItems = totalQty > 0;
+  const showCartUi = location.startsWith("/menu");
+
+  if (!showCartUi) return null;
 
   return (
     <button
@@ -30,10 +35,15 @@ export function CartButton() {
 }
 
 /*
-  Inline cart icon for the desktop TopNav. Always visible there.
+  Inline cart icon for the desktop TopNav.
+  Only visible on the Menu page.
 */
 export function CartIconNav() {
+  const [location] = useLocation();
   const { totalQty, openDrawer } = useCart();
+  const showCartUi = location.startsWith("/menu");
+
+  if (!showCartUi) return null;
 
   return (
     <button
