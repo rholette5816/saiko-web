@@ -607,7 +607,7 @@ export default function AdminCounter() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-3 md:flex-1 md:min-h-0">
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.5fr)_minmax(380px,1fr)] gap-3 md:flex-1 md:min-h-0">
             <div className="bg-white rounded-xl border border-[#d8d2cb] p-3 md:p-4 md:h-full md:min-h-0 md:flex md:flex-col">
               <div className="flex flex-col gap-3">
                 <div className="flex gap-2 overflow-x-auto pb-1">
