@@ -76,13 +76,13 @@ export function FeaturedSection() {
             onPointerDown={() => pauseAutoScroll(5000)}
             onTouchStart={() => pauseAutoScroll(5000)}
             onWheel={() => pauseAutoScroll(3000)}
-            className="overflow-x-auto overflow-y-hidden snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden touch-pan-x"
+            className="overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden touch-pan-x"
           >
             <div className="flex w-max gap-4 md:gap-6 px-2 md:px-4">
               {loopedItems.map((item, index) => (
                 <article
                   key={`${item.id}-${index}`}
-                  className="group relative snap-start min-w-[86vw] max-w-[86vw] sm:min-w-[340px] sm:max-w-[340px] md:min-w-[420px] md:max-w-[420px] bg-white rounded-xl overflow-hidden border border-[#ebe9e6] hover:border-[#c08643]/60 hover:shadow-xl transition-all duration-300"
+                  className="group relative min-w-[86vw] max-w-[86vw] sm:min-w-[340px] sm:max-w-[340px] md:min-w-[420px] md:max-w-[420px] bg-white rounded-xl overflow-hidden border border-[#ebe9e6] hover:border-[#c08643]/60 hover:shadow-xl transition-all duration-300"
                 >
                   <div className="relative aspect-[3/4] bg-gradient-to-br from-[#ebe9e6] via-[#f5f4f2] to-[#ebe9e6] flex items-center justify-center overflow-hidden">
                     {item.image ? (
