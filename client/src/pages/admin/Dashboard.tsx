@@ -1,7 +1,9 @@
+import { ReportMarkdown } from "@/components/ReportMarkdown";
 import { AdminLayout } from "@/components/AdminLayout";
 import { computeKpis, countByStatus, groupRevenueByDay } from "@/lib/analytics";
 import { type DateRange, type DateRangeKey, getCustomRange, getRange } from "@/lib/dateRanges";
 import { supabase, type OrderRow } from "@/lib/supabase";
+import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Link } from "wouter";
@@ -22,7 +24,7 @@ const rangeOptions: Array<{ key: Exclude<DateRangeKey, "custom">; label: string 
 ];
 
 function currencyPhp(value: number): string {
-  return `\u20B1${Math.round(value).toLocaleString("en-PH")}`;
+  return `PHP ${Math.round(value).toLocaleString("en-PH")}`;
 }
 
 export default function AdminDashboard() {
@@ -33,6 +35,10 @@ export default function AdminDashboard() {
   const [range, setRange] = useState<DateRange>(getRange("today"));
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
+  const [reportRange, setReportRange] = useState<{ from: string; to: string; label: string } | null>(null);
 
   const fetchOrders = useCallback(
     async (silent = false) => {
@@ -89,9 +95,44 @@ export default function AdminDashboard() {
     setRange(getCustomRange(customStart, customEnd));
   }
 
+  async function handleGenerateReport() {
+    setReportLoading(true);
+    setReportError(null);
+    setReportMarkdown(null);
+
+    const resolvedRange =
+      rangeKey === "custom"
+        ? range
+        : getRange(rangeKey as Exclude<DateRangeKey, "custom">);
+
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke("generate-report", {
+        body: { from: resolvedRange.startIso, to: resolvedRange.endIso, label: resolvedRange.label },
+      });
+      if (invokeError) throw invokeError;
+      if (!data?.report) throw new Error("Report came back empty");
+      setReportMarkdown(String(data.report));
+      setReportRange({ from: resolvedRange.startIso, to: resolvedRange.endIso, label: resolvedRange.label });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Unknown error";
+      setReportError(`Could not generate report: ${detail}`);
+    } finally {
+      setReportLoading(false);
+    }
+  }
+
   return (
     <AdminLayout>
-      <section className="space-y-5">
+      <section className="space-y-5 admin-print-scope">
+        <style>{`
+          @media print {
+            body { background: white !important; }
+            .print-hide { display: none !important; }
+            .admin-print-scope > *:not(.print-report) { display: none !important; }
+            .print-report { box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
+          }
+        `}</style>
+
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-[#0d0f13]">Dashboard</h1>
@@ -99,8 +140,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg p-4 space-y-3">
-          <div className="flex flex-wrap gap-2">
+        <div className="bg-white rounded-lg p-4 space-y-3 print-hide">
+          <div className="flex flex-wrap items-center gap-2">
             {rangeOptions.map((option) => (
               <button
                 key={option.key}
@@ -121,6 +162,19 @@ export default function AdminDashboard() {
               }`}
             >
               Custom
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerateReport}
+              disabled={reportLoading}
+              className="ml-auto inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#ac312d] text-white text-sm font-semibold disabled:opacity-60"
+            >
+              {reportLoading ? (
+                <span className="inline-block h-4 w-4 rounded-full border-2 border-white/60 border-t-white animate-spin" />
+              ) : (
+                <Sparkles size={14} />
+              )}
+              {reportLoading ? "Generating report..." : "Generate AI Report"}
             </button>
           </div>
 
@@ -154,6 +208,10 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+
+        {reportError && (
+          <div className="bg-white rounded-lg p-3 text-sm text-[#ac312d] print-hide">{reportError}</div>
+        )}
 
         {loading && <div className="bg-white rounded-lg p-5 text-sm text-[#705d48]">Loading dashboard...</div>}
         {error && <div className="bg-white rounded-lg p-5 text-sm text-[#ac312d]">Failed to load: {error}</div>}
@@ -190,7 +248,7 @@ export default function AdminDashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={revenueData}>
                       <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `\u20B1${value}`} />
+                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `PHP ${value}`} />
                       <Tooltip formatter={(value: number) => currencyPhp(value)} />
                       <Bar dataKey="revenue" fill="#ac312d" radius={[6, 6, 0, 0]} />
                     </BarChart>
@@ -247,7 +305,7 @@ export default function AdminDashboard() {
                         </span>
                       </div>
                       <div className="text-sm text-[#705d48] mt-1">
-                        {order.customer_name} · {currencyPhp(Number(order.total_amount))}
+                        {order.customer_name} | {currencyPhp(Number(order.total_amount))}
                       </div>
                     </li>
                   ))}
@@ -255,6 +313,37 @@ export default function AdminDashboard() {
               )}
             </div>
           </>
+        )}
+
+        {reportMarkdown && (
+          <section id="ai-report" className="bg-white rounded-2xl shadow-sm p-6 md:p-8 mt-8 print-report">
+            <div className="flex items-center justify-between mb-4 print-hide flex-wrap gap-3">
+              <div>
+                <h2 className="font-poppins font-bold text-xl uppercase tracking-wide text-[#0d0f13]">AI Report</h2>
+                <p className="text-sm text-[#705d48]">
+                  {reportRange?.label} | Generated{" "}
+                  {new Date().toLocaleString("en-PH", { timeZone: "Asia/Manila" })}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-[#0d0f13] text-white text-sm font-bold uppercase tracking-wide rounded-lg hover:bg-black transition-colors"
+                >
+                  Print / Save as PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReportMarkdown(null)}
+                  className="px-4 py-2 bg-white border border-[#0d0f13] text-[#0d0f13] text-sm font-bold uppercase tracking-wide rounded-lg hover:bg-[#ebe9e6] transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+            <ReportMarkdown markdown={reportMarkdown} />
+          </section>
         )}
       </section>
     </AdminLayout>
