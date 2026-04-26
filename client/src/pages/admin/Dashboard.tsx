@@ -109,7 +109,24 @@ export default function AdminDashboard() {
       const { data, error: invokeError } = await supabase.functions.invoke("generate-report", {
         body: { from: resolvedRange.startIso, to: resolvedRange.endIso, label: resolvedRange.label },
       });
-      if (invokeError) throw invokeError;
+      if (invokeError) {
+        let detail = invokeError.message;
+        const maybeContext = (invokeError as { context?: Response }).context;
+        if (maybeContext instanceof Response) {
+          try {
+            const payload = await maybeContext.json();
+            if (payload && typeof payload === "object" && "error" in payload) {
+              const serverError = (payload as { error?: unknown }).error;
+              if (typeof serverError === "string" && serverError.trim()) {
+                detail = serverError;
+              }
+            }
+          } catch {
+            // Keep fallback message from invokeError when context is non-JSON.
+          }
+        }
+        throw new Error(detail);
+      }
       if (!data?.report) throw new Error("Report came back empty");
       setReportMarkdown(String(data.report));
       setReportRange({ from: resolvedRange.startIso, to: resolvedRange.endIso, label: resolvedRange.label });

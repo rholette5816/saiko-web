@@ -4,6 +4,15 @@ This project uses Supabase as its backend. The migrations under `migrations/`
 define the schema. Apply them through the Supabase SQL editor or `supabase db push`
 if you have the Supabase CLI linked.
 
+## Current production direction (phone-first tracking)
+
+- Website no longer depends on Messenger redirect for customer updates.
+- Each order gets a `tracking_token`, and customer receives a copyable tracking URL:
+  - `/track/<tracking_token>`
+- Public status endpoint:
+  - `GET https://wiutixrypqrlfbandjox.supabase.co/functions/v1/get-order-tracking?token=<tracking_token>`
+- Staff updates order status from admin; tracker page reflects status changes.
+
 ## One-time project setup
 
 1. Create a Supabase project at https://supabase.com (free tier is fine).
@@ -100,11 +109,12 @@ Allowed status values: `pending`, `preparing`, `ready`, `completed`, `cancelled`
 
 1. Supabase Dashboard -> Edge Functions -> New function -> name it `get-order` -> paste contents of `supabase/functions/get-order/index.ts` -> Deploy.
 2. Repeat for `update-order-status` using `supabase/functions/update-order-status/index.ts`.
-3. Supabase Dashboard -> Edge Functions -> Secrets -> add `BOTCAKE_API_KEY` (set the value separately and never commit it).
-4. Add and deploy `attach-order-contact` from `supabase/functions/attach-order-contact/index.ts`.
-5. Add and deploy `notify-order-ready` from `supabase/functions/notify-order-ready/index.ts`.
-6. **Disable JWT verification for each function** (required so Botcake can call with only `x-api-key`):
-   - For each of `get-order`, `update-order-status`, `attach-order-contact`, `notify-order-ready`:
+3. Deploy `get-order-tracking` using `supabase/functions/get-order-tracking/index.ts`.
+4. Supabase Dashboard -> Edge Functions -> Secrets -> add `BOTCAKE_API_KEY` (set the value separately and never commit it).
+5. Add and deploy `attach-order-contact` from `supabase/functions/attach-order-contact/index.ts`.
+6. Add and deploy `notify-order-ready` from `supabase/functions/notify-order-ready/index.ts`.
+7. **Disable JWT verification for each public/bot function**:
+   - For each of `get-order`, `update-order-status`, `attach-order-contact`, `notify-order-ready`, `get-order-tracking`:
      - Open the function in the Dashboard -> Details -> toggle **Enforce JWT Verification** to OFF.
    - The functions enforce their own auth (`x-api-key` for Botcake, `Bearer` Supabase session for admin calls), so the platform-level JWT gate is redundant and blocks Botcake.
    - If you ever redeploy via Supabase CLI, `supabase/config.toml` already encodes `verify_jwt = false` for these four functions.
@@ -115,6 +125,7 @@ Additional endpoints:
 
 - `POST https://wiutixrypqrlfbandjox.supabase.co/functions/v1/attach-order-contact`
 - `POST https://wiutixrypqrlfbandjox.supabase.co/functions/v1/notify-order-ready`
+- `POST https://wiutixrypqrlfbandjox.supabase.co/functions/v1/notify-order`
 
 `attach-order-contact` is called by Botcake after referral capture to link Messenger user:
 
@@ -132,6 +143,18 @@ Additional endpoints:
   "ref": "SAIKO-0001"
 }
 ```
+
+`notify-order` supports existing-order notifications with template + resend control:
+
+```json
+{
+  "ref": "SAIKO-0001",
+  "template": "preparing",
+  "force": false
+}
+```
+
+Allowed templates: `order_received`, `preparing`, `ready`, `completed`.
 
 Required secrets for ready notification relay:
 

@@ -9,3 +9,9 @@ verify_jwt = false
 
 [functions.get-order]
 verify_jwt = false
+
+[functions.notify-order]
+verify_jwt = false
+
+[functions.get-order-tracking]
+verify_jwt = false

@@ -16,6 +16,14 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+function pickString(payload: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  }
+  return "";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
@@ -23,17 +31,32 @@ Deno.serve(async (req) => {
   const apiKey = req.headers.get("x-api-key");
   if (!apiKey || apiKey !== API_KEY) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  let payload: { ref?: unknown; messenger_psid?: unknown };
+  let payload: Record<string, unknown>;
   try {
-    payload = await req.json();
+    const raw = await req.json();
+    payload = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   } catch {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const ref = typeof payload.ref === "string" ? payload.ref.trim() : "";
-  const messengerPsid = typeof payload.messenger_psid === "string" ? payload.messenger_psid.trim() : "";
-  if (!ref) return jsonResponse({ error: "Missing ref" }, 400);
-  if (!messengerPsid) return jsonResponse({ error: "Missing messenger_psid" }, 400);
+  // Accept common aliases so Botcake field naming mismatches do not break linking.
+  const ref = pickString(payload, ["ref", "order_number", "orderNumber", "reference"]);
+  const messengerPsid = pickString(payload, ["messenger_psid", "psid", "messengerPsid", "subscriber_id", "contact_id"]);
+  if (!ref) {
+    return jsonResponse(
+      { error: "Missing ref", accepted_keys: ["ref", "order_number", "orderNumber", "reference"] },
+      400,
+    );
+  }
+  if (!messengerPsid) {
+    return jsonResponse(
+      {
+        error: "Missing messenger_psid",
+        accepted_keys: ["messenger_psid", "psid", "messengerPsid", "subscriber_id", "contact_id"],
+      },
+      400,
+    );
+  }
 
   const { data, error } = await supabase
     .from("orders")
@@ -46,6 +69,7 @@ Deno.serve(async (req) => {
   if (!data) return jsonResponse({ error: "Order not found" }, 404);
 
   return jsonResponse({
+    ok: true,
     order_number: data.order_number,
     messenger_psid: data.messenger_psid,
     linked: true,

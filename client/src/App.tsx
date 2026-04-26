@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { CartProvider } from "./lib/cart";
+import { BusinessSettingsProvider } from "./lib/businessSettings";
 import { MenuOverridesProvider } from "./lib/itemOverrides";
 import { CartDrawer } from "./components/CartDrawer";
 import { CartButton } from "./components/CartButton";
@@ -22,6 +23,9 @@ import AdminOrders from "./pages/admin/Orders";
 import AdminPrintSlip from "./pages/admin/PrintSlip";
 import AdminPromos from "./pages/admin/Promos";
 import AdminProducts from "./pages/admin/Products";
+import AdminCounter from "./pages/admin/Counter";
+import AdminSettings from "./pages/admin/Settings";
+import AdminDailyReport from "./pages/admin/DailyReport";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -67,6 +71,16 @@ function Router() {
             <AdminOrders />
           </AdminGuard>
         </Route>
+        <Route path={"/admin/counter"}>
+          <AdminGuard>
+            <AdminCounter />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/reports/daily"}>
+          <AdminGuard>
+            <AdminDailyReport />
+          </AdminGuard>
+        </Route>
         <Route path={"/admin/products"}>
           <AdminGuard>
             <AdminProducts />
@@ -75,6 +89,11 @@ function Router() {
         <Route path={"/admin/promos"}>
           <AdminGuard>
             <AdminPromos />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/settings"}>
+          <AdminGuard>
+            <AdminSettings />
           </AdminGuard>
         </Route>
         <Route path={"/admin/orders/:id/print"}>
@@ -110,12 +129,14 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <CartProvider>
-            <MenuOverridesProvider>
-              <Toaster />
-              <Router />
-              <CartButton />
-              <CartDrawer />
-            </MenuOverridesProvider>
+            <BusinessSettingsProvider>
+              <MenuOverridesProvider>
+                <Toaster />
+                <Router />
+                <CartButton />
+                <CartDrawer />
+              </MenuOverridesProvider>
+            </BusinessSettingsProvider>
           </CartProvider>
         </TooltipProvider>
       </ThemeProvider>

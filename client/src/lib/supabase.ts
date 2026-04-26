@@ -27,6 +27,16 @@ export interface OrderRow {
   promo_code?: string | null;
   subtotal?: number | null;
   discount_amount?: number | null;
+  channel?: "web" | "counter" | null;
+  payment_method?: string | null;
+  amount_received?: number | null;
+  or_number?: string | null;
+  vat_amount?: number | null;
+  vatable_sales?: number | null;
+  vat_exempt_sales?: number | null;
+  senior_pwd_discount?: number | null;
+  senior_pwd_id?: string | null;
+  senior_pwd_name?: string | null;
   messenger_psid?: string | null;
   ready_notified_at?: string | null;
   created_at: string;
@@ -63,5 +73,20 @@ export interface PromoCodeRow {
   times_used: number;
   is_active: boolean;
   created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessSettings {
+  id: string;
+  business_name: string;
+  business_tin: string | null;
+  business_address: string | null;
+  business_contact: string | null;
+  vat_registered: boolean;
+  vat_rate: number;
+  or_prefix: string;
+  or_next_number: number;
+  receipt_footer: string | null;
+  is_bir_accredited: boolean;
   updated_at: string;
 }
