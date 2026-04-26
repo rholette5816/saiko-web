@@ -5,12 +5,14 @@ import { MenuSearch } from "@/components/MenuSearch";
 import { MobileActionBar } from "@/components/MobileActionBar";
 import { OpenStatusBadge } from "@/components/OpenStatusBadge";
 import { TopNav } from "@/components/TopNav";
+import { useCart } from "@/lib/cart";
 import { menuData } from "@/lib/menuData";
-import { MessageCircle } from "lucide-react";
+import { Phone, ShoppingBag } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export default function Menu() {
   const [query, setQuery] = useState("");
+  const { openDrawer } = useCart();
 
   useEffect(() => {
     document.title = "Menu · Saiko Ramen & Sushi - Home Made Ramen, Sushi, Bento";
@@ -99,17 +101,27 @@ export default function Menu() {
             <h2 className="font-poppins font-bold text-2xl md:text-3xl text-white mb-3 uppercase tracking-wide">
               Ready to Order?
             </h2>
-            <p className="text-[#ebe9e6]/80 mb-6 max-w-md mx-auto">
-              Send us a message on Messenger and we'll get your order ready.
+            <p className="text-[#ebe9e6]/80 mb-6 max-w-xl mx-auto">
+              Add your dishes to cart, checkout in a minute, and get a live tracking link right away.
             </p>
-            <a
-              href="https://m.me/saikoramenandsushi?ref=menu-page"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-8 py-3 bg-[#ac312d] text-white font-bold uppercase tracking-wide rounded-lg hover:bg-[#8f2825] transition-colors"
-            >
-              <MessageCircle size={18} /> Message Us
-            </a>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-3">
+              <button
+                type="button"
+                onClick={openDrawer}
+                className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-[#ac312d] text-white font-bold uppercase tracking-wide rounded-lg hover:bg-[#8f2825] transition-colors min-w-[220px]"
+              >
+                <ShoppingBag size={18} /> Review Cart
+              </button>
+              <a
+                href="tel:09178658587"
+                className="inline-flex items-center justify-center gap-2 px-8 py-3 border border-[#ebe9e6]/40 text-[#ebe9e6] font-bold uppercase tracking-wide rounded-lg hover:bg-white/10 transition-colors min-w-[220px]"
+              >
+                <Phone size={18} /> Call Store
+              </a>
+            </div>
+            <p className="text-xs text-[#ebe9e6]/65">
+              Already ordered? Use your tracking link from Order Confirmation.
+            </p>
           </div>
         </div>
       </main>
