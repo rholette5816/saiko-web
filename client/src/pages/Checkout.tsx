@@ -327,7 +327,7 @@ export default function Checkout() {
                           {appliedPromo.description ? ` - ${appliedPromo.description}` : ""}
                         </p>
                         <div className="mt-1 flex items-center justify-between gap-2">
-                          <p className="text-[#705d48]">Discount: -\u20B1{appliedPromo.discountAmount.toLocaleString()}</p>
+                          <p className="text-[#705d48]">Discount: -PHP {appliedPromo.discountAmount.toLocaleString()}</p>
                           <button
                             type="button"
                             onClick={handleClearPromo}
@@ -359,10 +359,10 @@ export default function Checkout() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-[#0d0f13] truncate">{item.name}</p>
                       <p className="text-xs text-[#705d48]">
-                        {item.quantity} x \u20B1{item.price}
+                        {item.quantity} x PHP {item.price}
                       </p>
                     </div>
-                    <p className="font-bold text-[#0d0f13] flex-shrink-0">\u20B1{(item.price * item.quantity).toLocaleString()}</p>
+                    <p className="font-bold text-[#0d0f13] flex-shrink-0">PHP {(item.price * item.quantity).toLocaleString()}</p>
                   </li>
                 ))}
               </ul>
@@ -370,18 +370,18 @@ export default function Checkout() {
               <div className="pt-3 border-t border-[#ebe9e6] space-y-2">
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">Subtotal</span>
-                  <span className="font-semibold text-[#0d0f13]">\u20B1{cart.totalPrice.toLocaleString()}</span>
+                  <span className="font-semibold text-[#0d0f13]">PHP {cart.totalPrice.toLocaleString()}</span>
                 </div>
                 {appliedPromo && (
                   <div className="flex items-baseline justify-between">
                     <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">{appliedPromo.code}</span>
-                    <span className="font-semibold text-[#2d7a3e]">-\u20B1{appliedPromo.discountAmount.toLocaleString()}</span>
+                    <span className="font-semibold text-[#2d7a3e]">-PHP {appliedPromo.discountAmount.toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">Total</span>
                   <span className="font-poppins font-bold text-2xl text-[#ac312d]">
-                    \u20B1{(appliedPromo?.total ?? cart.totalPrice).toLocaleString()}
+                    PHP {(appliedPromo?.total ?? cart.totalPrice).toLocaleString()}
                   </span>
                 </div>
               </div>
