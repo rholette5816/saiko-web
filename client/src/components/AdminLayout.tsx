@@ -1,7 +1,7 @@
 import { signOut, useAuth } from "@/lib/auth";
 import { type LiveStatus, type NewOrderEvent, subscribeToOrderInserts } from "@/lib/adminRealtime";
 import logo from "@/assets/logo.png";
-import { Bell, LayoutDashboard, ListOrdered, LogOut, Package, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
+import { Bell, LayoutDashboard, ListOrdered, LogOut, Package, Tag, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
@@ -36,6 +36,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard, active: (path: string) => path === "/admin" },
       { href: "/admin/orders", label: "Orders", icon: ListOrdered, active: (path: string) => path.startsWith("/admin/orders") },
       { href: "/admin/products", label: "Products", icon: Package, active: (path: string) => path.startsWith("/admin/products") },
+      { href: "/admin/promos", label: "Promos", icon: Tag, active: (path: string) => path.startsWith("/admin/promos") },
     ],
     [],
   );

@@ -15,6 +15,7 @@ export const supabase = createClient(url ?? "", anon ?? "", {
 export interface OrderRow {
   id: string;
   order_number: string;
+  tracking_token?: string;
   customer_name: string;
   customer_phone: string;
   pickup_label: string;
@@ -23,6 +24,9 @@ export interface OrderRow {
   notes: string | null;
   status: "pending" | "preparing" | "ready" | "completed" | "cancelled";
   total_amount: number;
+  promo_code?: string | null;
+  subtotal?: number | null;
+  discount_amount?: number | null;
   messenger_psid?: string | null;
   ready_notified_at?: string | null;
   created_at: string;
@@ -43,5 +47,21 @@ export interface ItemOverrideRow {
   item_id: string;
   is_available: boolean;
   is_best_seller: boolean;
+  updated_at: string;
+}
+
+export interface PromoCodeRow {
+  code: string;
+  description: string | null;
+  discount_type: "percent" | "fixed";
+  discount_value: number;
+  min_order_amount: number | null;
+  max_discount: number | null;
+  valid_from: string | null;
+  valid_until: string | null;
+  usage_limit: number | null;
+  times_used: number;
+  is_active: boolean;
+  created_at: string;
   updated_at: string;
 }

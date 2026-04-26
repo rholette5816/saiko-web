@@ -14,11 +14,13 @@ import Home from "./pages/Home";
 import Menu from "./pages/Menu";
 import Checkout from "./pages/Checkout";
 import OrderConfirmed from "./pages/OrderConfirmed";
+import TrackOrder from "./pages/TrackOrder";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminLogin from "./pages/admin/Login";
 import AdminOrderDetail from "./pages/admin/OrderDetail";
 import AdminOrders from "./pages/admin/Orders";
 import AdminPrintSlip from "./pages/admin/PrintSlip";
+import AdminPromos from "./pages/admin/Promos";
 import AdminProducts from "./pages/admin/Products";
 
 function ScrollToTop() {
@@ -51,6 +53,9 @@ function Router() {
         <Route path={"/menu"} component={Menu} />
         <Route path={"/checkout"} component={Checkout} />
         <Route path={"/order-confirmed"} component={OrderConfirmed} />
+        <Route path={"/track/:token"}>
+          {(params) => <TrackOrder token={params.token} />}
+        </Route>
         <Route path={"/admin/login"} component={AdminLogin} />
         <Route path={"/admin"}>
           <AdminGuard>
@@ -65,6 +70,11 @@ function Router() {
         <Route path={"/admin/products"}>
           <AdminGuard>
             <AdminProducts />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/promos"}>
+          <AdminGuard>
+            <AdminPromos />
           </AdminGuard>
         </Route>
         <Route path={"/admin/orders/:id/print"}>

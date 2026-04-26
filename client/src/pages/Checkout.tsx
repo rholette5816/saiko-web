@@ -1,19 +1,28 @@
 import { Footer } from "@/components/Footer";
 import { TopNav } from "@/components/TopNav";
 import { useCart } from "@/lib/cart";
-import { getPickupOptions, type PickupSlot } from "@/lib/pickupSlots";
 import { formatOrderText } from "@/lib/orderFormat";
+import { getPickupOptions, type PickupSlot } from "@/lib/pickupSlots";
 import { supabase } from "@/lib/supabase";
+import { AlertCircle, ChevronLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { AlertCircle, ChevronLeft } from "lucide-react";
+
+interface PromoValidationResponse {
+  valid: boolean;
+  error?: string;
+  code?: string;
+  description?: string | null;
+  discount_amount?: number | string;
+  total?: number | string;
+}
 
 export default function Checkout() {
   const cart = useCart();
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    document.title = "Checkout · Saiko Ramen & Sushi";
+    document.title = "Checkout - Saiko Ramen & Sushi";
   }, []);
 
   const [name, setName] = useState("");
@@ -22,11 +31,20 @@ export default function Checkout() {
   const [pickupValue, setPickupValue] = useState<string>("asap");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [promoInput, setPromoInput] = useState("");
+  const [promoExpanded, setPromoExpanded] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    description: string | null;
+    discountAmount: number;
+    total: number;
+  } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [validatingPromo, setValidatingPromo] = useState(false);
 
   const pickup = useMemo(() => getPickupOptions(), []);
   const selectedSlot: PickupSlot | undefined = pickup.slots.find((s) => s.value === pickupValue);
 
-  // If pickup options change (e.g., closed state) make sure the selection is valid.
   useEffect(() => {
     if (!pickup.slots.length) return;
     if (!pickup.slots.find((s) => s.value === pickupValue)) {
@@ -41,17 +59,59 @@ export default function Checkout() {
     !!selectedSlot &&
     !submitting;
 
+  async function handleApplyPromo() {
+    const code = promoInput.trim();
+    if (!code) return;
+
+    setValidatingPromo(true);
+    setPromoError(null);
+
+    const { data, error: validateError } = await supabase.rpc("validate_promo_code", {
+      p_code: code,
+      p_subtotal: cart.totalPrice,
+    });
+
+    setValidatingPromo(false);
+
+    const payload = (data ?? null) as PromoValidationResponse | null;
+    if (validateError || !payload || !payload.valid) {
+      setPromoError((payload && payload.error) || "Could not apply promo code");
+      setAppliedPromo(null);
+      return;
+    }
+
+    setAppliedPromo({
+      code: String(payload.code ?? code).toUpperCase(),
+      description: payload.description ?? null,
+      discountAmount: Number(payload.discount_amount ?? 0),
+      total: Number(payload.total ?? cart.totalPrice),
+    });
+  }
+
+  function handleClearPromo() {
+    setAppliedPromo(null);
+    setPromoInput("");
+    setPromoError(null);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit || !selectedSlot) return;
     setSubmitting(true);
     setError(null);
 
+    const finalSubtotal = cart.totalPrice;
+    const finalDiscount = appliedPromo?.discountAmount ?? 0;
+    const finalTotal = appliedPromo?.total ?? cart.totalPrice;
+
     const orderText = formatOrderText(cart.items, {
       name: name.trim(),
       phone: phone.trim(),
       pickupLabel: selectedSlot.label,
       notes: notes.trim() || undefined,
+      promoCode: appliedPromo?.code ?? null,
+      subtotal: finalSubtotal,
+      discountAmount: finalDiscount,
     });
 
     const orderItems = cart.items.map((item) => ({
@@ -70,7 +130,10 @@ export default function Checkout() {
         p_pickup_time: selectedSlot.date.toISOString(),
         p_is_pre_order: selectedSlot.isTomorrow ?? false,
         p_notes: notes.trim() || null,
-        p_total_amount: cart.totalPrice,
+        p_subtotal: finalSubtotal,
+        p_total_amount: finalTotal,
+        p_discount_amount: finalDiscount,
+        p_promo_code: appliedPromo?.code ?? null,
         p_items: orderItems,
       });
 
@@ -79,14 +142,18 @@ export default function Checkout() {
         firstRow && typeof firstRow === "object" && "order_number" in firstRow
           ? String((firstRow as { order_number: string }).order_number)
           : "";
+      const trackingToken =
+        firstRow && typeof firstRow === "object" && "tracking_token" in firstRow
+          ? String((firstRow as { tracking_token: string }).tracking_token)
+          : "";
 
       if (orderError || !orderNumber) {
-        setError("Something went wrong. Try again or call us directly.");
+        const detail = orderError?.message ?? "Order number was not returned.";
+        setError(`Could not place order: ${detail}`);
         setSubmitting(false);
         return;
       }
 
-      // Stash for confirmation page.
       sessionStorage.setItem(
         "saiko-last-order",
         JSON.stringify({
@@ -96,14 +163,21 @@ export default function Checkout() {
           phone: phone.trim(),
           pickup: selectedSlot.label,
           isTomorrow: !!selectedSlot.isTomorrow,
-          total: cart.totalPrice,
+          total: finalTotal,
+          subtotal: finalSubtotal,
+          discountAmount: finalDiscount,
+          promoCode: appliedPromo?.code ?? null,
+          trackingToken,
         }),
       );
 
       cart.clear();
-      navigate("/order-confirmed");
-    } catch {
-      setError("Something went wrong. Try again or call us directly.");
+      const query = new URLSearchParams({ ref: orderNumber });
+      if (trackingToken) query.set("track", trackingToken);
+      navigate(`/order-confirmed?${query.toString()}`);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Unknown error";
+      setError(`Could not place order: ${detail}`);
       setSubmitting(false);
     }
   }
@@ -150,7 +224,6 @@ export default function Checkout() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Form */}
             <div className="md:col-span-2 bg-white rounded-2xl p-6 md:p-8 space-y-5">
               <div>
                 <label className="block text-sm font-bold uppercase tracking-wide text-[#0d0f13] mb-2">
@@ -179,9 +252,7 @@ export default function Checkout() {
                   inputMode="tel"
                   className="w-full px-4 py-3 rounded-lg border-2 border-[#ebe9e6] focus:outline-none focus:border-[#c08643] bg-white text-[#0d0f13]"
                 />
-                <p className="text-xs text-[#705d48] mt-1">
-                  We'll only text or call to confirm your pickup.
-                </p>
+                <p className="text-xs text-[#705d48] mt-1">We'll only text or call to confirm your pickup.</p>
               </div>
 
               <div>
@@ -203,9 +274,7 @@ export default function Checkout() {
                     ))}
                   </select>
                 )}
-                <p className="text-xs text-[#705d48] mt-1">
-                  Minimum prep time is {pickup.prepMinutes} minutes.
-                </p>
+                <p className="text-xs text-[#705d48] mt-1">Minimum prep time is {pickup.prepMinutes} minutes.</p>
               </div>
 
               <div>
@@ -221,16 +290,67 @@ export default function Checkout() {
                 />
               </div>
 
+              <div className="rounded-lg border border-[#ebe9e6] p-4">
+                <button
+                  type="button"
+                  onClick={() => setPromoExpanded((prev) => !prev)}
+                  className="w-full flex items-center justify-between text-left"
+                >
+                  <span className="text-sm font-bold text-[#0d0f13]">Have a promo code?</span>
+                  <span className="text-xs font-semibold text-[#705d48]">{promoExpanded ? "Hide" : "Apply"}</span>
+                </button>
+
+                {promoExpanded && (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promoInput}
+                        onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                        placeholder="Enter code"
+                        className="flex-1 px-3 py-2.5 rounded-lg border-2 border-[#ebe9e6] focus:outline-none focus:border-[#c08643] bg-white text-[#0d0f13]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyPromo}
+                        disabled={validatingPromo || !promoInput.trim()}
+                        className="px-4 py-2.5 rounded-lg bg-[#0d0f13] text-white text-sm font-semibold disabled:opacity-50"
+                      >
+                        {validatingPromo ? "Checking..." : "Apply"}
+                      </button>
+                    </div>
+
+                    {appliedPromo && (
+                      <div className="rounded-lg bg-[#ebe9e6]/60 px-3 py-2.5 text-sm">
+                        <p className="font-semibold text-[#0d0f13]">
+                          {appliedPromo.code} applied
+                          {appliedPromo.description ? ` - ${appliedPromo.description}` : ""}
+                        </p>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <p className="text-[#705d48]">Discount: -\u20B1{appliedPromo.discountAmount.toLocaleString()}</p>
+                          <button
+                            type="button"
+                            onClick={handleClearPromo}
+                            className="text-xs font-semibold text-[#ac312d]"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {promoError && <p className="text-sm text-[#ac312d]">{promoError}</p>}
+                  </div>
+                )}
+              </div>
+
               <p className="text-xs text-[#705d48]">
                 Your order will be sent to our Messenger right after you tap Place Order. Confirm pickup details there.
               </p>
 
-              {error && (
-                <p className="text-sm text-[#ac312d] font-medium">{error}</p>
-              )}
+              {error && <p className="text-sm text-[#ac312d] font-medium">{error}</p>}
             </div>
 
-            {/* Summary */}
             <aside className="bg-white rounded-2xl p-6 md:p-7 h-fit md:sticky md:top-20 space-y-4">
               <h2 className="font-poppins font-bold uppercase tracking-wide text-[#0d0f13]">Order Summary</h2>
               <ul className="space-y-2 max-h-64 overflow-y-auto">
@@ -239,21 +359,31 @@ export default function Checkout() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-[#0d0f13] truncate">{item.name}</p>
                       <p className="text-xs text-[#705d48]">
-                        {item.quantity} × ₱{item.price}
+                        {item.quantity} x \u20B1{item.price}
                       </p>
                     </div>
-                    <p className="font-bold text-[#0d0f13] flex-shrink-0">
-                      ₱{(item.price * item.quantity).toLocaleString()}
-                    </p>
+                    <p className="font-bold text-[#0d0f13] flex-shrink-0">\u20B1{(item.price * item.quantity).toLocaleString()}</p>
                   </li>
                 ))}
               </ul>
 
-              <div className="pt-3 border-t border-[#ebe9e6] flex items-baseline justify-between">
-                <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">Total</span>
-                <span className="font-poppins font-bold text-2xl text-[#ac312d]">
-                  ₱{cart.totalPrice.toLocaleString()}
-                </span>
+              <div className="pt-3 border-t border-[#ebe9e6] space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">Subtotal</span>
+                  <span className="font-semibold text-[#0d0f13]">\u20B1{cart.totalPrice.toLocaleString()}</span>
+                </div>
+                {appliedPromo && (
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">{appliedPromo.code}</span>
+                    <span className="font-semibold text-[#2d7a3e]">-\u20B1{appliedPromo.discountAmount.toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">Total</span>
+                  <span className="font-poppins font-bold text-2xl text-[#ac312d]">
+                    \u20B1{(appliedPromo?.total ?? cart.totalPrice).toLocaleString()}
+                  </span>
+                </div>
               </div>
 
               <button
@@ -263,9 +393,7 @@ export default function Checkout() {
               >
                 {submitting ? "Sending..." : "Place Order"}
               </button>
-              <p className="text-xs text-[#705d48] text-center">
-                Pickup only. No payment online. Pay at the counter.
-              </p>
+              <p className="text-xs text-[#705d48] text-center">Pickup only. No payment online. Pay at the counter.</p>
             </aside>
           </form>
         )}
