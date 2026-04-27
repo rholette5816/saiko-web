@@ -26,6 +26,7 @@ import AdminProducts from "./pages/admin/Products";
 import AdminCounter from "./pages/admin/Counter";
 import AdminSettings from "./pages/admin/Settings";
 import AdminDailyReport from "./pages/admin/DailyReport";
+import AdminHelp from "./pages/admin/Help";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -94,6 +95,11 @@ function Router() {
         <Route path={"/admin/settings"}>
           <AdminGuard>
             <AdminSettings />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/help"}>
+          <AdminGuard>
+            <AdminHelp />
           </AdminGuard>
         </Route>
         <Route path={"/admin/orders/:id/print"}>
