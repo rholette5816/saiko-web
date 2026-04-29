@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 type StatusFilter = "all" | "pending" | "preparing" | "ready" | "completed" | "cancelled";
+type BulkStatusAction = "preparing" | "ready" | "completed" | "cancelled";
 type OrderWithItems = OrderRow & { order_items?: OrderItemRow[] };
 
 const dateOptions: Array<{ key: Exclude<DateRangeKey, "custom">; label: string }> = [
@@ -57,6 +58,9 @@ export default function AdminOrders() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [dateKey, setDateKey] = useState<DateRangeKey>("today");
   const [range, setRange] = useState<DateRange>(getRange("today"));
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -92,6 +96,17 @@ export default function AdminOrders() {
   }, [fetchOrders]);
 
   useEffect(() => {
+    setSelectedIds((prev) => {
+      const next = new Set<string>();
+      const visibleIds = new Set(orders.map((order) => order.id));
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+      }
+      return next;
+    });
+  }, [orders]);
+
+  useEffect(() => {
     const onNewOrder = () => fetchOrders(true);
     window.addEventListener("saiko:new-order", onNewOrder);
     const interval = window.setInterval(() => fetchOrders(true), 15000);
@@ -106,6 +121,9 @@ export default function AdminOrders() {
     const activeCount = orders.filter((order) => ["pending", "preparing", "ready"].includes(order.status)).length;
     return { count: orders.length, amount, activeCount };
   }, [orders]);
+
+  const selectedCount = selectedIds.size;
+  const allVisibleSelected = orders.length > 0 && orders.every((order) => selectedIds.has(order.id));
 
   function applyRange(nextKey: Exclude<DateRangeKey, "custom">) {
     setDateKey(nextKey);
@@ -124,6 +142,77 @@ export default function AdminOrders() {
       orders.map((order) => ({ ...order, items: order.order_items ?? [] })),
       filename,
     );
+  }
+
+  function canTransition(current: OrderRow["status"], next: BulkStatusAction): boolean {
+    if (current === next) return false;
+    if (current === "cancelled" || current === "completed") return false;
+    if (current === "pending") return next === "preparing" || next === "cancelled";
+    if (current === "preparing") return next === "ready" || next === "cancelled";
+    if (current === "ready") return next === "completed" || next === "cancelled";
+    return false;
+  }
+
+  function toggleSelection(orderId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  }
+
+  function toggleSelectAllVisible() {
+    if (allVisibleSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(orders.map((order) => order.id)));
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function applyBulkStatus(nextStatus: BulkStatusAction) {
+    if (!selectedCount || bulkRunning) return;
+
+    const confirmed = window.confirm(`Apply "${nextStatus}" to ${selectedCount} selected orders?`);
+    if (!confirmed) return;
+
+    setBulkRunning(true);
+    setBulkMessage(null);
+
+    const selectedOrders = orders.filter((order) => selectedIds.has(order.id));
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const order of selectedOrders) {
+      if (!canTransition(order.status, nextStatus)) {
+        skipped += 1;
+        continue;
+      }
+
+      const { error: updateError } = await supabase
+        .from("orders")
+        .update({ status: nextStatus })
+        .eq("id", order.id);
+
+      if (updateError) failed += 1;
+      else updated += 1;
+    }
+
+    setSelectedIds(new Set());
+    setBulkRunning(false);
+
+    const parts: string[] = [];
+    if (updated > 0) parts.push(`${updated} updated`);
+    if (skipped > 0) parts.push(`${skipped} skipped`);
+    if (failed > 0) parts.push(`${failed} failed`);
+    setBulkMessage(parts.length ? `Bulk action finished: ${parts.join(", ")}.` : "No changes made.");
+
+    await fetchOrders(true);
   }
 
   return (
@@ -159,6 +248,47 @@ export default function AdminOrders() {
             </button>
           </div>
         </div>
+
+        {selectedCount > 0 && (
+          <div className="sticky top-2 z-10 bg-[#0d0f13] text-white rounded-lg p-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold">{selectedCount} selected</span>
+            <button
+              type="button"
+              onClick={toggleSelectAllVisible}
+              className="px-2.5 py-1.5 rounded-md bg-white/10 text-xs font-semibold"
+            >
+              {allVisibleSelected ? "Unselect all visible" : "Select all visible"}
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="px-2.5 py-1.5 rounded-md bg-white/10 text-xs font-semibold"
+            >
+              Clear
+            </button>
+            {[
+              { value: "preparing" as BulkStatusAction, label: "Mark Preparing" },
+              { value: "ready" as BulkStatusAction, label: "Mark Ready" },
+              { value: "completed" as BulkStatusAction, label: "Mark Completed" },
+              { value: "cancelled" as BulkStatusAction, label: "Cancel" },
+            ].map((action) => (
+              <button
+                key={action.value}
+                type="button"
+                onClick={() => applyBulkStatus(action.value)}
+                disabled={bulkRunning}
+                className="px-3 py-1.5 rounded-md bg-[#c08643] text-[#0d0f13] text-xs font-bold disabled:opacity-60"
+              >
+                {action.label}
+              </button>
+            ))}
+            {bulkRunning && <span className="text-xs text-white/90">Applying...</span>}
+          </div>
+        )}
+
+        {bulkMessage && (
+          <div className="bg-white rounded-lg p-3 text-sm text-[#0d0f13] border border-[#d8d2cb]">{bulkMessage}</div>
+        )}
 
         <div className="bg-white rounded-lg p-4 space-y-4">
           <div className="flex flex-wrap gap-2">
@@ -244,6 +374,14 @@ export default function AdminOrders() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-[#705d48] border-b border-[#ebe9e6]">
+                      <th className="py-2 pr-2 w-10">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={toggleSelectAllVisible}
+                          aria-label="Select all visible orders"
+                        />
+                      </th>
                       <th className="py-2">Order #</th>
                       <th className="py-2">Customer</th>
                       <th className="py-2">Phone</th>
@@ -260,6 +398,14 @@ export default function AdminOrders() {
                         onClick={() => navigate(`/admin/orders/${order.id}`)}
                         className="border-b border-[#f1ede9] cursor-pointer hover:bg-[#faf8f6]"
                       >
+                        <td className="py-2 pr-2" onClick={(event) => event.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(order.id)}
+                            onChange={() => toggleSelection(order.id)}
+                            aria-label={`Select order ${order.order_number}`}
+                          />
+                        </td>
                         <td className="py-2 font-semibold text-[#0d0f13]">{order.order_number}</td>
                         <td className="py-2">{order.customer_name}</td>
                         <td className="py-2">{order.customer_phone}</td>
@@ -279,13 +425,26 @@ export default function AdminOrders() {
 
               <div className="md:hidden space-y-2">
                 {orders.map((order) => (
-                  <button
+                  <div
                     key={order.id}
-                    type="button"
                     onClick={() => navigate(`/admin/orders/${order.id}`)}
                     className="w-full text-left border border-[#ebe9e6] rounded-md p-3"
                   >
-                    <div className="flex justify-between items-center gap-2">
+                    <div className="flex justify-between items-start gap-2">
+                      <label
+                        className="inline-flex items-center gap-2 text-xs text-[#705d48]"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(order.id)}
+                          onChange={() => toggleSelection(order.id)}
+                          aria-label={`Select order ${order.order_number}`}
+                        />
+                        Select
+                      </label>
+                    </div>
+                    <div className="flex justify-between items-center gap-2 mt-1">
                       <p className="font-semibold text-[#0d0f13]">{order.order_number}</p>
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusColors[order.status]}`}>
                         {order.status}
@@ -296,7 +455,7 @@ export default function AdminOrders() {
                     <p className="text-xs text-[#705d48] mt-1">Pickup: {order.pickup_label}</p>
                     <p className="text-sm font-semibold text-[#0d0f13] mt-1">{currencyPhp(Number(order.total_amount))}</p>
                     <p className="text-xs text-[#705d48] mt-1">{formatDate(order.created_at)}</p>
-                  </button>
+                  </div>
                 ))}
               </div>
             </>
