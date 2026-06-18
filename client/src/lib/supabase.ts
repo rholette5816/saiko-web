@@ -28,6 +28,7 @@ export interface OrderRow {
   subtotal?: number | null;
   discount_amount?: number | null;
   channel?: "web" | "counter" | null;
+  table_number?: string | null;
   payment_method?: string | null;
   amount_received?: number | null;
   or_number?: string | null;

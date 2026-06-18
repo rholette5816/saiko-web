@@ -24,6 +24,8 @@ import AdminPrintSlip from "./pages/admin/PrintSlip";
 import AdminPromos from "./pages/admin/Promos";
 import AdminProducts from "./pages/admin/Products";
 import AdminCounter from "./pages/admin/Counter";
+import AdminTables from "./pages/admin/Tables";
+import AdminTableOrder from "./pages/admin/TableOrder";
 import AdminSettings from "./pages/admin/Settings";
 import AdminDailyReport from "./pages/admin/DailyReport";
 import AdminHelp from "./pages/admin/Help";
@@ -76,6 +78,18 @@ function Router() {
           <AdminGuard>
             <AdminCounter />
           </AdminGuard>
+        </Route>
+        <Route path={"/admin/tables"}>
+          <AdminGuard>
+            <AdminTables />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/tables/:tableId"}>
+          {(params) => (
+            <AdminGuard>
+              <AdminTableOrder tableId={params.tableId} />
+            </AdminGuard>
+          )}
         </Route>
         <Route path={"/admin/reports/daily"}>
           <AdminGuard>

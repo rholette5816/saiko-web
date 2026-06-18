@@ -1,7 +1,7 @@
 import { signOut, useAuth } from "@/lib/auth";
 import { type LiveStatus, type NewOrderEvent, subscribeToOrderInserts } from "@/lib/adminRealtime";
 import logo from "@/assets/logo.png";
-import { Bell, BookOpen, Calculator, FileText, LayoutDashboard, ListOrdered, LogOut, Package, Settings, Tag, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
+import { Bell, BookOpen, Calculator, FileText, LayoutDashboard, LayoutGrid, ListOrdered, LogOut, Package, Settings, Tag, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
@@ -36,6 +36,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard, active: (path: string) => path === "/admin" },
       { href: "/admin/orders", label: "Orders", icon: ListOrdered, active: (path: string) => path.startsWith("/admin/orders") },
       { href: "/admin/counter", label: "Counter", icon: Calculator, active: (path: string) => path.startsWith("/admin/counter") },
+      { href: "/admin/tables", label: "Tables", icon: LayoutGrid, active: (path: string) => path.startsWith("/admin/tables") },
       { href: "/admin/reports/daily", label: "Daily Report", icon: FileText, active: (path: string) => path.startsWith("/admin/reports/daily") },
       { href: "/admin/products", label: "Products", icon: Package, active: (path: string) => path.startsWith("/admin/products") },
       { href: "/admin/promos", label: "Promos", icon: Tag, active: (path: string) => path.startsWith("/admin/promos") },
