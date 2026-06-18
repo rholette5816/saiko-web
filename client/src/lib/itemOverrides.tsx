@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "./supabase";
 
+// Deprecated compatibility layer. Product state now lives in menu_items.
 interface Override {
   is_available: boolean;
   is_best_seller: boolean;
@@ -21,18 +22,17 @@ export function MenuOverridesProvider({ children }: { children: ReactNode }) {
 
   async function fetchOverrides() {
     const { data, error } = await supabase
-      .from("item_overrides")
-      .select("item_id, is_available, is_best_seller");
+      .from("menu_items")
+      .select("id, is_available, is_best_seller");
 
     if (error) {
-      console.warn("[overrides] fetch failed", error);
       setLoading(false);
       return;
     }
 
     const next = new Map<string, Override>();
     for (const row of data ?? []) {
-      next.set(row.item_id, {
+      next.set(row.id, {
         is_available: row.is_available,
         is_best_seller: row.is_best_seller,
       });

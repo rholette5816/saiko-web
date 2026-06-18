@@ -6,22 +6,49 @@ import { MobileActionBar } from "@/components/MobileActionBar";
 import { OpenStatusBadge } from "@/components/OpenStatusBadge";
 import { TopNav } from "@/components/TopNav";
 import { useCart } from "@/lib/cart";
-import { menuData } from "@/lib/menuData";
+import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
 import { Phone, ShoppingBag } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export default function Menu() {
   const [query, setQuery] = useState("");
+  const [menuCategories, setMenuCategories] = useState<MenuCategory[]>([]);
+  const [loadingMenu, setLoadingMenu] = useState(true);
+  const [menuError, setMenuError] = useState<string | null>(null);
   const { openDrawer } = useCart();
 
   useEffect(() => {
     document.title = "Menu · Saiko Ramen & Sushi - Home Made Ramen, Sushi, Bento";
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    async function loadMenu() {
+      setLoadingMenu(true);
+      setMenuError(null);
+      try {
+        const nextMenu = await fetchMenuCategories();
+        if (!active) return;
+        setMenuCategories(nextMenu);
+      } catch {
+        if (!active) return;
+        setMenuCategories([]);
+        setMenuError("Menu could not load. Please refresh.");
+      } finally {
+        if (active) setLoadingMenu(false);
+      }
+    }
+
+    void loadMenu();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const filteredMenu = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return menuData;
-    return menuData
+    if (!q) return menuCategories;
+    return menuCategories
       .map((cat) => ({
         ...cat,
         items: cat.items.filter(
@@ -32,13 +59,14 @@ export default function Menu() {
         ),
       }))
       .filter((cat) => cat.items.length > 0);
-  }, [query]);
+  }, [menuCategories, query]);
 
   const resultCount = query
     ? filteredMenu.reduce((sum, c) => sum + c.items.length, 0)
     : null;
 
-  const categoriesForNav = filteredMenu.length ? filteredMenu : menuData;
+  const categoriesForNav = filteredMenu.length ? filteredMenu : menuCategories;
+  const menuItemCount = menuCategories.reduce((n, c) => n + c.items.length, 0);
 
   return (
     <div
@@ -66,21 +94,29 @@ export default function Menu() {
             <OpenStatusBadge />
             <span className="text-[#705d48] text-sm">·</span>
             <span className="text-sm text-[#705d48]">
-              {menuData.length} categories · {menuData.reduce((n, c) => n + c.items.length, 0)} dishes
+              {menuCategories.length} categories · {menuItemCount} dishes
             </span>
           </div>
         </div>
       </header>
 
       {/* Sticky Category Nav */}
-      <CategoryNav categories={categoriesForNav} />
+      {categoriesForNav.length > 0 && <CategoryNav categories={categoriesForNav} />}
 
       {/* Menu Content */}
       <main id="menu-top" className="bg-white">
         <div className="container py-10 md:py-14">
           <MenuSearch value={query} onChange={setQuery} resultCount={resultCount} />
 
-          {filteredMenu.length === 0 ? (
+          {loadingMenu ? (
+            <div className="text-center py-16">
+              <p className="text-[#705d48]">Loading menu...</p>
+            </div>
+          ) : menuError ? (
+            <div className="text-center py-16">
+              <p className="text-[#ac312d]">{menuError}</p>
+            </div>
+          ) : filteredMenu.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-[#705d48]">No dishes matched your search. Try another keyword.</p>
             </div>

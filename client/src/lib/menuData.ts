@@ -3,6 +3,7 @@ import featuredGyoza from "@/assets/images/featured-gyoza.png";
 import featuredWagyuTeppan from "@/assets/images/featured-wagyu-teppan.png";
 import featuredDragonRoll from "@/assets/images/featured-dragon-roll.png";
 
+// Deprecated reference data. Live menu reads from menuItems.ts and 20260619_012_menu_items_table.sql.
 export type MenuBadge = "bestseller" | "chefs-pick" | "new" | "spicy";
 
 export interface MenuItem {
