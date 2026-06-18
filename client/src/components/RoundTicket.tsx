@@ -46,7 +46,9 @@ export function RoundTicket(props: RoundTicketProps) {
         @media print {
           @page { size: 80mm auto; margin: 0; }
           body { background: white !important; }
-          .round-ticket { box-shadow: none !important; page-break-after: always; }
+          body * { visibility: hidden !important; }
+          .round-ticket, .round-ticket * { visibility: visible !important; }
+          .round-ticket { box-shadow: none !important; page-break-after: always; margin: 0 !important; }
           .round-ticket:last-child { page-break-after: auto; }
         }
       `}</style>

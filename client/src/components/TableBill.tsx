@@ -81,7 +81,9 @@ export function TableBill(props: TableBillProps) {
         @media print {
           @page { size: 80mm auto; margin: 0; }
           body { background: white !important; }
-          .table-bill { box-shadow: none !important; }
+          body * { visibility: hidden !important; }
+          .table-bill, .table-bill * { visibility: visible !important; }
+          .table-bill { box-shadow: none !important; margin: 0 !important; }
         }
       `}</style>
 
