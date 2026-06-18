@@ -21,9 +21,11 @@ interface CounterReceiptProps {
   vatableSales: number;
   vatAmount: number;
   vatExemptSales: number;
-  seniorPwdDiscount: number;
-  seniorPwdId: string | null;
-  seniorPwdName: string | null;
+  discountType: string;
+  discountPct: number;
+  discountAmount: number;
+  discountIdNumber: string | null;
+  discountHolderName: string | null;
   settings: BusinessSettings;
   cashier?: string | null;
 }
@@ -38,6 +40,14 @@ function sectionDivider(char = "-") {
 
 export function CounterReceipt(props: CounterReceiptProps) {
   const isOfficial = props.settings.is_bir_accredited;
+  const DISCOUNT_LABELS: Record<string, string> = {
+    senior: "Senior Citizen",
+    pwd: "PWD",
+    employee: "Employee",
+    friends: "Friends",
+    custom: "Custom",
+  };
+  const discountLabel = DISCOUNT_LABELS[props.discountType] ?? props.discountType;
 
   return (
     <div className="counter-receipt">
@@ -126,32 +136,49 @@ export function CounterReceipt(props: CounterReceiptProps) {
 
       <div className="center divider">{sectionDivider("-")}</div>
 
-      {props.seniorPwdDiscount > 0 ? (
+      {props.discountAmount > 0 ? (
         <>
           <div className="row">
             <span className="label">Subtotal</span>
             <span className="value">{money(props.subtotal)}</span>
           </div>
           <div className="row">
-            <span className="label">Senior/PWD Discount (20%)</span>
-            <span className="value">-{money(props.seniorPwdDiscount)}</span>
+            <span className="label">{discountLabel} -{props.discountPct}%</span>
+            <span className="value">-{money(props.discountAmount)}</span>
           </div>
-          <div className="row">
-            <span className="label">VAT-Exempt Sales</span>
-            <span className="value">{money(props.vatExemptSales)}</span>
-          </div>
+          {props.vatExemptSales > 0 ? (
+            <div className="row">
+              <span className="label">VAT-Exempt Sales</span>
+              <span className="value">{money(props.vatExemptSales)}</span>
+            </div>
+          ) : props.settings.vat_registered ? (
+            <>
+              <div className="row">
+                <span className="label">VAT-able Sales</span>
+                <span className="value">{money(props.vatableSales)}</span>
+              </div>
+              <div className="row">
+                <span className="label">VAT ({money(props.settings.vat_rate).replace(".00", "")}%)</span>
+                <span className="value">{money(props.vatAmount)}</span>
+              </div>
+            </>
+          ) : null}
           <div className="row bold">
             <span className="label">TOTAL</span>
             <span className="value">{money(props.total)}</span>
           </div>
-          <div className="row">
-            <span className="label">Senior ID:</span>
-            <span className="value">{props.seniorPwdId || "N/A"}</span>
-          </div>
-          <div className="row">
-            <span className="label">Customer:</span>
-            <span className="value">{props.seniorPwdName || props.customer}</span>
-          </div>
+          {props.discountIdNumber && (
+            <>
+              <div className="row">
+                <span className="label">ID Number:</span>
+                <span className="value">{props.discountIdNumber}</span>
+              </div>
+              <div className="row">
+                <span className="label">Full Name:</span>
+                <span className="value">{props.discountHolderName || props.customer}</span>
+              </div>
+            </>
+          )}
         </>
       ) : props.settings.vat_registered ? (
         <>

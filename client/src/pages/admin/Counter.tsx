@@ -8,6 +8,16 @@ import { Minus, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type PaymentMethod = "cash" | "gcash" | "card";
+type DiscountType = "none" | "senior" | "pwd" | "employee" | "friends" | "custom";
+
+const DISCOUNT_PRESETS: Record<DiscountType, { label: string; defaultPct: number; requiresId: boolean }> = {
+  none: { label: "None", defaultPct: 0, requiresId: false },
+  senior: { label: "Senior Citizen", defaultPct: 20, requiresId: true },
+  pwd: { label: "PWD", defaultPct: 20, requiresId: true },
+  employee: { label: "Employee", defaultPct: 10, requiresId: false },
+  friends: { label: "Friends", defaultPct: 15, requiresId: false },
+  custom: { label: "Custom", defaultPct: 0, requiresId: false },
+};
 
 interface CounterMenuItem {
   id: string;
@@ -40,9 +50,11 @@ interface CompletedOrder {
   vatableSales: number;
   vatAmount: number;
   vatExemptSales: number;
-  seniorPwdDiscount: number;
-  seniorPwdId: string | null;
-  seniorPwdName: string | null;
+  discountType: DiscountType;
+  discountPct: number;
+  discountAmount: number;
+  discountIdNumber: string | null;
+  discountHolderName: string | null;
 }
 
 interface PlaceCounterOrderRow {
@@ -98,9 +110,10 @@ export default function AdminCounter() {
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [cashReceived, setCashReceived] = useState("");
-  const [isSeniorPwd, setIsSeniorPwd] = useState(false);
-  const [seniorId, setSeniorId] = useState("");
-  const [seniorName, setSeniorName] = useState("");
+  const [discountType, setDiscountType] = useState<DiscountType>("none");
+  const [discountPct, setDiscountPct] = useState<number>(0);
+  const [discountIdNumber, setDiscountIdNumber] = useState("");
+  const [discountHolderName, setDiscountHolderName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [printingOrder, setPrintingOrder] = useState<CompletedOrder | null>(null);
@@ -144,38 +157,24 @@ export default function AdminCounter() {
   );
 
   const pricing = useMemo(() => {
-    const seniorDiscount = isSeniorPwd ? round2(subtotal * 0.2) : 0;
-    if (isSeniorPwd) {
-      const vatExemptSales = round2(subtotal - seniorDiscount);
-      return {
-        seniorDiscount,
-        vatableSales: 0,
-        vatAmount: 0,
-        vatExemptSales,
-        total: vatExemptSales,
-      };
+    const discountAmount = discountType !== "none" ? round2(subtotal * discountPct / 100) : 0;
+    const isVatExempt = discountType === "senior" || discountType === "pwd";
+
+    if (isVatExempt) {
+      const vatExemptSales = round2(subtotal - discountAmount);
+      return { discountAmount, vatableSales: 0, vatAmount: 0, vatExemptSales, total: vatExemptSales };
     }
+
+    const base = round2(subtotal - discountAmount);
 
     if (resolvedSettings.vat_registered) {
-      const vatAmount = round2((subtotal * resolvedSettings.vat_rate) / (100 + resolvedSettings.vat_rate));
-      const vatableSales = round2(subtotal - vatAmount);
-      return {
-        seniorDiscount: 0,
-        vatableSales,
-        vatAmount,
-        vatExemptSales: 0,
-        total: subtotal,
-      };
+      const vatAmount = round2((base * resolvedSettings.vat_rate) / (100 + resolvedSettings.vat_rate));
+      const vatableSales = round2(base - vatAmount);
+      return { discountAmount, vatableSales, vatAmount, vatExemptSales: 0, total: base };
     }
 
-    return {
-      seniorDiscount: 0,
-      vatableSales: 0,
-      vatAmount: 0,
-      vatExemptSales: 0,
-      total: subtotal,
-    };
-  }, [isSeniorPwd, resolvedSettings.vat_rate, resolvedSettings.vat_registered, subtotal]);
+    return { discountAmount, vatableSales: 0, vatAmount: 0, vatExemptSales: 0, total: base };
+  }, [discountType, discountPct, resolvedSettings.vat_rate, resolvedSettings.vat_registered, subtotal]);
 
   const receivedAmount = paymentMethod === "cash" ? Number(cashReceived || 0) : pricing.total;
   const changeDue = paymentMethod === "cash" ? Math.max(0, round2(receivedAmount - pricing.total)) : 0;
@@ -233,9 +232,10 @@ export default function AdminCounter() {
     setNotes("");
     setCashReceived("");
     setPaymentMethod("cash");
-    setIsSeniorPwd(false);
-    setSeniorId("");
-    setSeniorName("");
+    setDiscountType("none");
+    setDiscountPct(0);
+    setDiscountIdNumber("");
+    setDiscountHolderName("");
     setError(null);
   }
 
@@ -246,8 +246,8 @@ export default function AdminCounter() {
 
     const received = paymentMethod === "cash" ? Number(cashReceived || 0) : pricing.total;
 
-    if (isSeniorPwd && (!seniorId.trim() || !seniorName.trim())) {
-      setError("Senior/PWD ID Number and Full Name are required.");
+    if (DISCOUNT_PRESETS[discountType].requiresId && (!discountIdNumber.trim() || !discountHolderName.trim())) {
+      setError(`${DISCOUNT_PRESETS[discountType].label} discount requires ID Number and Full Name.`);
       setSubmitting(false);
       return;
     }
@@ -266,9 +266,9 @@ export default function AdminCounter() {
       p_payment_method: paymentMethod,
       p_amount_received: paymentMethod === "cash" ? received : pricing.total,
       p_notes: notes.trim() || null,
-      p_senior_pwd: isSeniorPwd,
-      p_senior_pwd_id: isSeniorPwd ? seniorId.trim() : null,
-      p_senior_pwd_name: isSeniorPwd ? seniorName.trim() : null,
+      p_senior_pwd: discountType === "senior" || discountType === "pwd",
+      p_senior_pwd_id: DISCOUNT_PRESETS[discountType].requiresId ? discountIdNumber.trim() : null,
+      p_senior_pwd_name: DISCOUNT_PRESETS[discountType].requiresId ? discountHolderName.trim() : null,
       p_items: orderItems.map((item) => ({
         item_id: item.id,
         item_name: item.name,
@@ -312,9 +312,11 @@ export default function AdminCounter() {
       vatableSales: Number(row?.vatable_sales ?? pricing.vatableSales),
       vatAmount: Number(row?.vat_amount ?? pricing.vatAmount),
       vatExemptSales: Number(row?.vat_exempt_sales ?? pricing.vatExemptSales),
-      seniorPwdDiscount: Number(row?.senior_pwd_discount ?? pricing.seniorDiscount),
-      seniorPwdId: isSeniorPwd ? seniorId.trim() : null,
-      seniorPwdName: isSeniorPwd ? seniorName.trim() : null,
+      discountType,
+      discountPct,
+      discountAmount: Number(row?.senior_pwd_discount ?? pricing.discountAmount),
+      discountIdNumber: DISCOUNT_PRESETS[discountType].requiresId ? discountIdNumber.trim() : null,
+      discountHolderName: DISCOUNT_PRESETS[discountType].requiresId ? discountHolderName.trim() : null,
     };
 
     setPrintingOrder(completed);
@@ -411,25 +413,59 @@ export default function AdminCounter() {
             />
           </div>
 
-          <div className="rounded-lg border border-[#d8d2cb] p-3">
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={isSeniorPwd}
-                onChange={(event) => setIsSeniorPwd(event.target.checked)}
-              />
-              <span className="text-sm font-semibold text-[#0d0f13]">Senior Citizen / PWD</span>
-            </label>
-            <p className="mt-1 text-xs text-[#705d48]">Senior/PWD discount applies to the entire order.</p>
+          <div className="rounded-lg border border-[#d8d2cb] p-3 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Discount</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(Object.keys(DISCOUNT_PRESETS) as DiscountType[]).map((type) => (
+                <label
+                  key={type}
+                  className={`rounded-lg border px-2 py-2 text-center text-xs font-semibold cursor-pointer ${
+                    discountType === type
+                      ? "border-[#c08643] bg-[#c08643] text-white"
+                      : "border-[#d8d2cb] text-[#0d0f13]"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    className="sr-only"
+                    name={`discount-type-${isMobile ? "mobile" : "desktop"}`}
+                    value={type}
+                    checked={discountType === type}
+                    onChange={() => {
+                      setDiscountType(type);
+                      setDiscountPct(DISCOUNT_PRESETS[type].defaultPct);
+                      setDiscountIdNumber("");
+                      setDiscountHolderName("");
+                    }}
+                  />
+                  {DISCOUNT_PRESETS[type].label}
+                </label>
+              ))}
+            </div>
 
-            {isSeniorPwd && (
-              <div className="mt-3 space-y-2">
+            {discountType !== "none" && (
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Discount %</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={discountPct}
+                  onChange={(e) => setDiscountPct(Math.min(100, Math.max(0, Number(e.target.value))))}
+                  className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-2.5 py-2 text-sm"
+                />
+              </div>
+            )}
+
+            {discountType !== "none" && DISCOUNT_PRESETS[discountType].requiresId && (
+              <div className="space-y-2">
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">ID Number</label>
                   <input
                     type="text"
-                    value={seniorId}
-                    onChange={(event) => setSeniorId(event.target.value)}
+                    value={discountIdNumber}
+                    onChange={(e) => setDiscountIdNumber(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm"
                     placeholder="Required"
                   />
@@ -438,8 +474,8 @@ export default function AdminCounter() {
                   <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Full Name</label>
                   <input
                     type="text"
-                    value={seniorName}
-                    onChange={(event) => setSeniorName(event.target.value)}
+                    value={discountHolderName}
+                    onChange={(e) => setDiscountHolderName(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm"
                     placeholder="Required"
                   />
@@ -496,14 +532,14 @@ export default function AdminCounter() {
             <span className="font-semibold">{currencyPhp(subtotal)}</span>
           </div>
 
-          {pricing.seniorDiscount > 0 && (
+          {pricing.discountAmount > 0 && (
             <div className="flex items-center justify-between">
-              <span className="text-[#705d48]">Senior/PWD (-20%)</span>
-              <span className="font-semibold text-[#2d7a3e]">-{currencyPhp(pricing.seniorDiscount)}</span>
+              <span className="text-[#705d48]">{DISCOUNT_PRESETS[discountType].label} (-{discountPct}%)</span>
+              <span className="font-semibold text-[#2d7a3e]">-{currencyPhp(pricing.discountAmount)}</span>
             </div>
           )}
 
-          {!isSeniorPwd && resolvedSettings.vat_registered && (
+          {!(discountType === "senior" || discountType === "pwd") && resolvedSettings.vat_registered && (
             <>
               <div className="flex items-center justify-between">
                 <span className="text-[#705d48]">VAT-able Sales</span>
@@ -516,7 +552,7 @@ export default function AdminCounter() {
             </>
           )}
 
-          {isSeniorPwd && (
+          {(discountType === "senior" || discountType === "pwd") && (
             <div className="flex items-center justify-between">
               <span className="text-[#705d48]">VAT-Exempt Sales</span>
               <span className="font-semibold">{currencyPhp(pricing.vatExemptSales)}</span>
@@ -703,9 +739,11 @@ export default function AdminCounter() {
               vatableSales={printingOrder.vatableSales}
               vatAmount={printingOrder.vatAmount}
               vatExemptSales={printingOrder.vatExemptSales}
-              seniorPwdDiscount={printingOrder.seniorPwdDiscount}
-              seniorPwdId={printingOrder.seniorPwdId}
-              seniorPwdName={printingOrder.seniorPwdName}
+              discountType={printingOrder.discountType}
+              discountPct={printingOrder.discountPct}
+              discountAmount={printingOrder.discountAmount}
+              discountIdNumber={printingOrder.discountIdNumber}
+              discountHolderName={printingOrder.discountHolderName}
               settings={resolvedSettings}
               cashier={session?.user?.email ?? "admin"}
             />

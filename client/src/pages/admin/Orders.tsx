@@ -99,7 +99,7 @@ export default function AdminOrders() {
     setSelectedIds((prev) => {
       const next = new Set<string>();
       const visibleIds = new Set(orders.map((order) => order.id));
-      for (const id of prev) {
+      for (const id of Array.from(prev)) {
         if (visibleIds.has(id)) next.add(id);
       }
       return next;
