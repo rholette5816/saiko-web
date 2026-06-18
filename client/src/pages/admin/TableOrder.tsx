@@ -5,7 +5,7 @@ import { useBusinessSettings } from "@/lib/businessSettings";
 import { menuData } from "@/lib/menuData";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { getTable, type TableDef } from "@/lib/tables";
-import { ArrowLeft, ChevronDown, ChevronRight, Minus, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
@@ -222,6 +222,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const [submittingRound, setSubmittingRound] = useState(false);
   const [printingTicket, setPrintingTicket] = useState<TicketPayload | null>(null);
+  const [activePrintKind, setActivePrintKind] = useState<"kitchen" | "bar" | null>(null);
   const [closing, setClosing] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeForm, setCloseForm] = useState<CloseFormState>({
@@ -329,19 +330,19 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     };
   }, [table?.id]);
 
-  useEffect(() => {
+  function printTicket(kind: "kitchen" | "bar") {
     if (!printingTicket) return;
-    const printTimer = window.setTimeout(() => {
+    const previousTitle = document.title;
+    document.title = kind === "kitchen" ? "KITCHEN TICKET" : "BAR TICKET";
+    setActivePrintKind(kind);
+    window.setTimeout(() => {
       window.print();
-    }, 200);
-    const dismissTimer = window.setTimeout(() => {
-      setPrintingTicket(null);
-    }, 900);
-    return () => {
-      window.clearTimeout(printTimer);
-      window.clearTimeout(dismissTimer);
-    };
-  }, [printingTicket]);
+      window.setTimeout(() => {
+        document.title = previousTitle;
+        setActivePrintKind(null);
+      }, 150);
+    }, 80);
+  }
 
   useEffect(() => {
     if (!printingBill) return;
@@ -723,6 +724,46 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   >
                     {submittingRound ? "Submitting..." : "Submit Round"}
                   </button>
+
+                  {printingTicket && activePrintKind === null && (
+                    <div className="mt-3 rounded-lg border border-[#2d7a3e]/30 bg-[#2d7a3e]/10 p-3 space-y-3">
+                      <div className="flex items-start gap-2">
+                        <Check size={18} className="mt-0.5 text-[#2d7a3e] flex-shrink-0" />
+                        <p className="text-sm font-semibold text-[#0d0f13]">
+                          Round saved. Order #{printingTicket.orderNumber}
+                          {printingTicket.orNumber ? ` · OR ${printingTicket.orNumber}` : ""}
+                        </p>
+                      </div>
+                      <p className="text-xs text-[#705d48]">
+                        Print each ticket to its assigned printer.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          disabled={printingTicket.kitchenItems.length === 0}
+                          onClick={() => printTicket("kitchen")}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-[#ac312d] text-white text-xs font-bold uppercase tracking-wide disabled:bg-[#d8d2cb] disabled:text-[#705d48] disabled:cursor-not-allowed"
+                        >
+                          🍳 Kitchen Ticket
+                        </button>
+                        <button
+                          type="button"
+                          disabled={printingTicket.barItems.length === 0}
+                          onClick={() => printTicket("bar")}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-[#c08643] text-white text-xs font-bold uppercase tracking-wide disabled:bg-[#d8d2cb] disabled:text-[#705d48] disabled:cursor-not-allowed"
+                        >
+                          🍹 Bar Ticket
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPrintingTicket(null)}
+                        className="w-full rounded-lg border border-[#0d0f13] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#0d0f13]"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -876,32 +917,33 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
           </div>
         )}
 
-        {printingTicket && (
+        {printingTicket && activePrintKind === "kitchen" && printingTicket.kitchenItems.length > 0 && (
           <div className="print-tickets-root">
-            {printingTicket.kitchenItems.length > 0 && (
-              <RoundTicket
-                kind="kitchen"
-                tableNumber={String(printingTicket.table.number)}
-                capacity={printingTicket.table.capacity}
-                orderNumber={printingTicket.orderNumber}
-                orNumber={printingTicket.orNumber}
-                items={printingTicket.kitchenItems}
-                notes={printingTicket.notes || undefined}
-                createdAt={printingTicket.createdAt}
-              />
-            )}
-            {printingTicket.barItems.length > 0 && (
-              <RoundTicket
-                kind="bar"
-                tableNumber={String(printingTicket.table.number)}
-                capacity={printingTicket.table.capacity}
-                orderNumber={printingTicket.orderNumber}
-                orNumber={printingTicket.orNumber}
-                items={printingTicket.barItems}
-                notes={printingTicket.kitchenItems.length === 0 ? printingTicket.notes || undefined : undefined}
-                createdAt={printingTicket.createdAt}
-              />
-            )}
+            <RoundTicket
+              kind="kitchen"
+              tableNumber={String(printingTicket.table.number)}
+              capacity={printingTicket.table.capacity}
+              orderNumber={printingTicket.orderNumber}
+              orNumber={printingTicket.orNumber}
+              items={printingTicket.kitchenItems}
+              notes={printingTicket.notes || undefined}
+              createdAt={printingTicket.createdAt}
+            />
+          </div>
+        )}
+
+        {printingTicket && activePrintKind === "bar" && printingTicket.barItems.length > 0 && (
+          <div className="print-tickets-root">
+            <RoundTicket
+              kind="bar"
+              tableNumber={String(printingTicket.table.number)}
+              capacity={printingTicket.table.capacity}
+              orderNumber={printingTicket.orderNumber}
+              orNumber={printingTicket.orNumber}
+              items={printingTicket.barItems}
+              notes={printingTicket.notes || undefined}
+              createdAt={printingTicket.createdAt}
+            />
           </div>
         )}
 
