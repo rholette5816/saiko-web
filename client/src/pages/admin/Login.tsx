@@ -4,15 +4,17 @@ import { useLocation } from "wouter";
 
 export default function AdminLogin() {
   const [, navigate] = useLocation();
-  const { session, loading } = useAuth();
+  const { session, loading, role } = useAuth();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && session) navigate("/admin");
-  }, [loading, session, navigate]);
+    if (!loading && session) {
+      navigate(role === "staff" ? "/admin/tables" : "/admin");
+    }
+  }, [loading, session, role, navigate]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -24,7 +26,7 @@ export default function AdminLogin() {
       setError(result.error);
       return;
     }
-    navigate("/admin");
+    // Role-based redirect happens via the useEffect once the session updates.
   }
 
   return (

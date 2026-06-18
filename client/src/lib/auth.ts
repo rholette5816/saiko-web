@@ -27,7 +27,14 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
 }
 
-export function useAuth(): { session: Session | null; loading: boolean } {
+export type UserRole = "admin" | "staff";
+
+function extractRole(session: Session | null): UserRole {
+  const raw = session?.user?.user_metadata?.role;
+  return raw === "staff" ? "staff" : "admin";
+}
+
+export function useAuth(): { session: Session | null; loading: boolean; role: UserRole } {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,5 +60,5 @@ export function useAuth(): { session: Session | null; loading: boolean } {
     };
   }, []);
 
-  return { session, loading };
+  return { session, loading, role: extractRole(session) };
 }

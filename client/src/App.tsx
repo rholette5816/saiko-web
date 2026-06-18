@@ -65,7 +65,7 @@ function Router() {
         </Route>
         <Route path={"/admin/login"} component={AdminLogin} />
         <Route path={"/admin"}>
-          <AdminGuard>
+          <AdminGuard adminOnly>
             <AdminDashboard />
           </AdminGuard>
         </Route>
@@ -92,22 +92,22 @@ function Router() {
           )}
         </Route>
         <Route path={"/admin/reports/daily"}>
-          <AdminGuard>
+          <AdminGuard adminOnly>
             <AdminDailyReport />
           </AdminGuard>
         </Route>
         <Route path={"/admin/products"}>
-          <AdminGuard>
+          <AdminGuard adminOnly>
             <AdminProducts />
           </AdminGuard>
         </Route>
         <Route path={"/admin/promos"}>
-          <AdminGuard>
+          <AdminGuard adminOnly>
             <AdminPromos />
           </AdminGuard>
         </Route>
         <Route path={"/admin/settings"}>
-          <AdminGuard>
+          <AdminGuard adminOnly>
             <AdminSettings />
           </AdminGuard>
         </Route>

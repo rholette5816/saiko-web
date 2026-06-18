@@ -22,17 +22,19 @@ function playAlertTone() {
   oscillator.stop(context.currentTime + 0.18);
 }
 
+const STAFF_NAV_LABELS = new Set(["Orders", "Counter", "Tables", "Help"]);
+
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
-  const { session } = useAuth();
+  const { session, role } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
   const [unseenOrders, setUnseenOrders] = useState<NewOrderEvent[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(false);
 
-  const navItems = useMemo(
-    () => [
+  const navItems = useMemo(() => {
+    const all = [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard, active: (path: string) => path === "/admin" },
       { href: "/admin/orders", label: "Orders", icon: ListOrdered, active: (path: string) => path.startsWith("/admin/orders") },
       { href: "/admin/counter", label: "Counter", icon: Calculator, active: (path: string) => path.startsWith("/admin/counter") },
@@ -42,9 +44,9 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       { href: "/admin/promos", label: "Promos", icon: Tag, active: (path: string) => path.startsWith("/admin/promos") },
       { href: "/admin/settings", label: "Settings", icon: Settings, active: (path: string) => path.startsWith("/admin/settings") },
       { href: "/admin/help", label: "Help", icon: BookOpen, active: (path: string) => path.startsWith("/admin/help") },
-    ],
-    [],
-  );
+    ];
+    return role === "staff" ? all.filter((item) => STAFF_NAV_LABELS.has(item.label)) : all;
+  }, [role]);
 
   useEffect(() => {
     const savedSound = localStorage.getItem(SOUND_KEY);
@@ -108,9 +110,11 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-[#ebe9e6] text-[#0d0f13]">
       <header className="border-b border-[#d8d2cb] bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 justify-between">
-          <Link href="/admin" className="inline-flex items-center gap-3">
+          <Link href={role === "staff" ? "/admin/tables" : "/admin"} className="inline-flex items-center gap-3">
             <img src={logo} alt="Saiko" className="h-9 w-auto" />
-            <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">Admin</span>
+            <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">
+              {role === "staff" ? "Staff" : "Admin"}
+            </span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
             <span
