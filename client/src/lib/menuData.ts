@@ -193,7 +193,7 @@ export const menuData: MenuCategory[] = [
     name: "DORIA MEAL",
     emoji: "🍛",
     items: [
-      { id: "d1", name: "Chicken or Shrimp", price: 269, image: menuImage("Cheesy Parmesan Chicken.png") },
+      { id: "d1", name: "Chicken or Shrimp", price: 269 },
       { id: "d2", name: "Seafood", price: 269, image: menuImage("Seafood Doria.png") },
       { id: "d3", name: "Beef", price: 247, badge: "bestseller" },
     ],
