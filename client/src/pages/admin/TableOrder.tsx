@@ -5,7 +5,7 @@ import { useBusinessSettings } from "@/lib/businessSettings";
 import { menuData } from "@/lib/menuData";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { getTable, type TableDef } from "@/lib/tables";
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Minus, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
@@ -243,7 +243,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const [submittingRound, setSubmittingRound] = useState(false);
   const [printingTicket, setPrintingTicket] = useState<TicketPayload | null>(null);
-  const [lastSubmittedTicket, setLastSubmittedTicket] = useState<TicketPayload | null>(null);
   const [activePrintKind, setActivePrintKind] = useState<TicketKind | null>(null);
   const [printingByTicket, setPrintingByTicket] = useState<Record<string, boolean>>({});
   const [closing, setClosing] = useState(false);
@@ -483,9 +482,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setSubmittingRound(true);
     setError(null);
 
-    const kitchenItems = orderItems.filter((item) => item.category !== "drinks");
-    const barItems = orderItems.filter((item) => item.category === "drinks");
-
     const { data, error: rpcError } = await supabase.rpc("place_table_round", {
       p_table_number: table.id,
       p_subtotal: currentSubtotal,
@@ -513,16 +509,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       return;
     }
 
-    setLastSubmittedTicket({
-      orderId: row.order_id,
-      table,
-      orderNumber: row.order_number,
-      orNumber: row.or_number ?? "",
-      kitchenItems: kitchenItems.map((item) => ({ name: item.name, quantity: item.quantity })),
-      barItems: barItems.map((item) => ({ name: item.name, quantity: item.quantity })),
-      notes: notes.trim(),
-      createdAt: new Date(),
-    });
     setOrderItems([]);
     setNotes("");
     setSubmittingRound(false);
@@ -842,46 +828,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   >
                     {submittingRound ? "Submitting..." : "Submit Round"}
                   </button>
-
-                  {lastSubmittedTicket && activePrintKind === null && (
-                    <div className="mt-3 rounded-lg border border-[#2d7a3e]/30 bg-[#2d7a3e]/10 p-3 space-y-3">
-                      <div className="flex items-start gap-2">
-                        <Check size={18} className="mt-0.5 text-[#2d7a3e] flex-shrink-0" />
-                        <p className="text-sm font-semibold text-[#0d0f13]">
-                          Round saved. Order #{lastSubmittedTicket.orderNumber}
-                          {lastSubmittedTicket.orNumber ? ` | OR ${lastSubmittedTicket.orNumber}` : ""}
-                        </p>
-                      </div>
-                      <p className="text-xs text-[#705d48]">
-                        Print each ticket from here or from the round card above.
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          disabled={lastSubmittedTicket.kitchenItems.length === 0}
-                          onClick={() => printTicket(lastSubmittedTicket, "kitchen")}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-[#ac312d] text-white text-xs font-bold uppercase tracking-wide disabled:bg-[#d8d2cb] disabled:text-[#705d48] disabled:cursor-not-allowed"
-                        >
-                          Submit Kitchen
-                        </button>
-                        <button
-                          type="button"
-                          disabled={lastSubmittedTicket.barItems.length === 0}
-                          onClick={() => printTicket(lastSubmittedTicket, "bar")}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-[#c08643] text-white text-xs font-bold uppercase tracking-wide disabled:bg-[#d8d2cb] disabled:text-[#705d48] disabled:cursor-not-allowed"
-                        >
-                          Submit Bar
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setLastSubmittedTicket(null)}
-                        className="w-full rounded-lg border border-[#0d0f13] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#0d0f13]"
-                      >
-                        Done
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
