@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
 type PaymentMethod = "cash" | "gcash" | "card";
+type TicketKind = "kitchen" | "bar";
 
 interface AdminTableOrderProps {
   tableId: string;
@@ -34,6 +35,7 @@ interface TableCartItem {
 
 interface RoundItemRow {
   id?: string;
+  item_id?: string;
   item_name: string;
   quantity: number | string;
   unit_price: number | string;
@@ -48,6 +50,11 @@ interface RoundWithItems {
   subtotal: number | string | null;
   total_amount: number | string | null;
   status: string;
+  notes: string | null;
+  kitchen_ticket_printed_at?: string | null;
+  kitchen_ticket_print_count?: number | string | null;
+  bar_ticket_printed_at?: string | null;
+  bar_ticket_print_count?: number | string | null;
   order_items?: RoundItemRow[] | null;
 }
 
@@ -60,6 +67,7 @@ interface PlaceTableRoundRow {
 }
 
 interface TicketPayload {
+  orderId: string;
   table: TableDef;
   orderNumber: string;
   orNumber: string;
@@ -169,6 +177,19 @@ function formatTime(value: string | Date): string {
   });
 }
 
+function ticketPrintedAt(round: RoundWithItems, kind: TicketKind): string | null {
+  return kind === "kitchen" ? round.kitchen_ticket_printed_at ?? null : round.bar_ticket_printed_at ?? null;
+}
+
+function ticketPrintCount(round: RoundWithItems, kind: TicketKind): number {
+  const raw = kind === "kitchen" ? round.kitchen_ticket_print_count : round.bar_ticket_print_count;
+  return Number(raw ?? 0);
+}
+
+function ticketKey(orderId: string, kind: TicketKind): string {
+  return `${orderId}-${kind}`;
+}
+
 function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSettings): BillPayload {
   const raw = (data ?? {}) as CloseTableBillResponse;
   const rounds = Array.isArray(raw.rounds)
@@ -222,7 +243,9 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const [submittingRound, setSubmittingRound] = useState(false);
   const [printingTicket, setPrintingTicket] = useState<TicketPayload | null>(null);
-  const [activePrintKind, setActivePrintKind] = useState<"kitchen" | "bar" | null>(null);
+  const [lastSubmittedTicket, setLastSubmittedTicket] = useState<TicketPayload | null>(null);
+  const [activePrintKind, setActivePrintKind] = useState<TicketKind | null>(null);
+  const [printingByTicket, setPrintingByTicket] = useState<Record<string, boolean>>({});
   const [closing, setClosing] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeForm, setCloseForm] = useState<CloseFormState>({
@@ -256,6 +279,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         })),
       ),
     [],
+  );
+
+  const itemCategoryById = useMemo(
+    () => new Map(allItems.map((item) => [item.id, item.categoryId])),
+    [allItems],
   );
 
   const filteredItems = useMemo(() => {
@@ -330,17 +358,63 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     };
   }, [table?.id]);
 
-  function printTicket(kind: "kitchen" | "bar") {
-    if (!printingTicket) return;
+  function getRoundTicketItems(round: RoundWithItems, kind: TicketKind) {
+    return (round.order_items ?? [])
+      .filter((item) => {
+        const category = itemCategoryById.get(item.item_id ?? "");
+        const isDrink = category === "drinks";
+        return kind === "bar" ? isDrink : !isDrink;
+      })
+      .map((item) => ({ name: item.item_name, quantity: Number(item.quantity ?? 0) }))
+      .filter((item) => item.quantity > 0);
+  }
+
+  function buildRoundTicketPayload(round: RoundWithItems): TicketPayload {
+    if (!table) throw new Error("Table is required");
+    return {
+      orderId: round.id,
+      table,
+      orderNumber: round.order_number,
+      orNumber: round.or_number ?? "",
+      kitchenItems: getRoundTicketItems(round, "kitchen"),
+      barItems: getRoundTicketItems(round, "bar"),
+      notes: round.notes ?? "",
+      createdAt: new Date(round.created_at),
+    };
+  }
+
+  async function markTicketPrinted(orderId: string, kind: TicketKind) {
+    const { error: markError } = await supabase.rpc("mark_table_ticket_printed", {
+      p_order_id: orderId,
+      p_kind: kind,
+    });
+
+    if (markError) {
+      setError(markError.message);
+      return;
+    }
+
+    await loadRounds();
+  }
+
+  function printTicket(payload: TicketPayload, kind: TicketKind) {
+    const items = kind === "kitchen" ? payload.kitchenItems : payload.barItems;
+    if (items.length === 0) return;
+
     const previousTitle = document.title;
+    const key = ticketKey(payload.orderId, kind);
     document.title = kind === "kitchen" ? "KITCHEN TICKET" : "BAR TICKET";
+    setPrintingByTicket((current) => ({ ...current, [key]: true }));
+    setPrintingTicket(payload);
     setActivePrintKind(kind);
     window.setTimeout(() => {
       window.print();
-      window.setTimeout(() => {
+      void markTicketPrinted(payload.orderId, kind).finally(() => {
         document.title = previousTitle;
         setActivePrintKind(null);
-      }, 150);
+        setPrintingTicket(null);
+        setPrintingByTicket((current) => ({ ...current, [key]: false }));
+      });
     }, 80);
   }
 
@@ -439,7 +513,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       return;
     }
 
-    setPrintingTicket({
+    setLastSubmittedTicket({
+      orderId: row.order_id,
       table,
       orderNumber: row.order_number,
       orNumber: row.or_number ?? "",
@@ -493,6 +568,45 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setPrintingBill(parseBillPayload(data, table, resolvedSettings));
     setShowCloseModal(false);
     setClosing(false);
+  }
+
+  function renderTicketAction(round: RoundWithItems, kind: TicketKind) {
+    const items = getRoundTicketItems(round, kind);
+    if (items.length === 0) return null;
+
+    const printedAt = ticketPrintedAt(round, kind);
+    const printCount = ticketPrintCount(round, kind);
+    const label = kind === "kitchen" ? "Kitchen" : "Bar";
+    const key = ticketKey(round.id, kind);
+    const isPrinting = !!printingByTicket[key];
+    const statusText = printedAt
+      ? `Printed ${formatTime(printedAt)}${printCount > 1 ? ` (${printCount}x)` : ""}`
+      : "Pending";
+
+    return (
+      <div className="flex flex-col gap-2 rounded-md border border-[#ebe9e6] bg-[#f6f2ed] p-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-[#705d48]">{label} Ticket</p>
+          <p className={`text-xs font-semibold ${printedAt ? "text-[#2d7a3e]" : "text-[#ac312d]"}`}>
+            {statusText}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => printTicket(buildRoundTicketPayload(round), kind)}
+          disabled={isPrinting}
+          className={`inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-bold uppercase tracking-wide ${
+            printedAt
+              ? "border border-[#0d0f13] bg-white text-[#0d0f13]"
+              : kind === "kitchen"
+                ? "bg-[#ac312d] text-white"
+                : "bg-[#c08643] text-white"
+          } disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          {isPrinting ? "Printing..." : printedAt ? `Reprint ${label}` : `Submit ${label}`}
+        </button>
+      </div>
+    );
   }
 
   if (!table) {
@@ -635,6 +749,10 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                         </span>
                         {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
                       </button>
+                      <div className="grid gap-2 px-3 pb-3 sm:grid-cols-2">
+                        {renderTicketAction(round, "kitchen")}
+                        {renderTicketAction(round, "bar")}
+                      </div>
                       {expanded && (
                         <div className="border-t border-[#ebe9e6] p-3 pt-2">
                           {(round.order_items ?? []).map((item, itemIndex) => (
@@ -725,39 +843,39 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                     {submittingRound ? "Submitting..." : "Submit Round"}
                   </button>
 
-                  {printingTicket && activePrintKind === null && (
+                  {lastSubmittedTicket && activePrintKind === null && (
                     <div className="mt-3 rounded-lg border border-[#2d7a3e]/30 bg-[#2d7a3e]/10 p-3 space-y-3">
                       <div className="flex items-start gap-2">
                         <Check size={18} className="mt-0.5 text-[#2d7a3e] flex-shrink-0" />
                         <p className="text-sm font-semibold text-[#0d0f13]">
-                          Round saved. Order #{printingTicket.orderNumber}
-                          {printingTicket.orNumber ? ` · OR ${printingTicket.orNumber}` : ""}
+                          Round saved. Order #{lastSubmittedTicket.orderNumber}
+                          {lastSubmittedTicket.orNumber ? ` | OR ${lastSubmittedTicket.orNumber}` : ""}
                         </p>
                       </div>
                       <p className="text-xs text-[#705d48]">
-                        Print each ticket to its assigned printer.
+                        Print each ticket from here or from the round card above.
                       </p>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          disabled={printingTicket.kitchenItems.length === 0}
-                          onClick={() => printTicket("kitchen")}
+                          disabled={lastSubmittedTicket.kitchenItems.length === 0}
+                          onClick={() => printTicket(lastSubmittedTicket, "kitchen")}
                           className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-[#ac312d] text-white text-xs font-bold uppercase tracking-wide disabled:bg-[#d8d2cb] disabled:text-[#705d48] disabled:cursor-not-allowed"
                         >
-                          🍳 Kitchen Ticket
+                          Submit Kitchen
                         </button>
                         <button
                           type="button"
-                          disabled={printingTicket.barItems.length === 0}
-                          onClick={() => printTicket("bar")}
+                          disabled={lastSubmittedTicket.barItems.length === 0}
+                          onClick={() => printTicket(lastSubmittedTicket, "bar")}
                           className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-[#c08643] text-white text-xs font-bold uppercase tracking-wide disabled:bg-[#d8d2cb] disabled:text-[#705d48] disabled:cursor-not-allowed"
                         >
-                          🍹 Bar Ticket
+                          Submit Bar
                         </button>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setPrintingTicket(null)}
+                        onClick={() => setLastSubmittedTicket(null)}
                         className="w-full rounded-lg border border-[#0d0f13] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#0d0f13]"
                       >
                         Done

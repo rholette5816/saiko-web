@@ -38,6 +38,10 @@ export interface OrderRow {
   senior_pwd_discount?: number | null;
   senior_pwd_id?: string | null;
   senior_pwd_name?: string | null;
+  kitchen_ticket_printed_at?: string | null;
+  kitchen_ticket_print_count?: number | null;
+  bar_ticket_printed_at?: string | null;
+  bar_ticket_print_count?: number | null;
   messenger_psid?: string | null;
   ready_notified_at?: string | null;
   created_at: string;
