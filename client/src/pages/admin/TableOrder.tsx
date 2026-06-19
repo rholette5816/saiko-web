@@ -131,6 +131,7 @@ interface BillPayload {
   seniorPwdId?: string | null;
   seniorPwdName?: string | null;
   settings: BusinessSettings;
+  isFinal?: boolean;
 }
 
 const WAITER_OPTIONS = ["Anfernee", "Angeline", "Bell", "Carin", "Kikay", "Sadam", "Melinda", "Shy"];
@@ -519,15 +520,22 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
   useEffect(() => {
     if (!printingBill) return;
+    const isBillOut = printingBill.isFinal === false;
     const printTimer = window.setTimeout(() => {
       window.print();
-    }, 200);
-    const navigateTimer = window.setTimeout(() => {
-      navigate("/admin/tables");
-    }, 900);
+    }, 300);
+    // Bill Out (not final): dismiss after print, stay on the table so staff can keep working.
+    // Settle & Close (final): navigate back to the tables grid.
+    const followUpTimer = window.setTimeout(() => {
+      if (isBillOut) {
+        setPrintingBill(null);
+      } else {
+        navigate("/admin/tables");
+      }
+    }, 1200);
     return () => {
       window.clearTimeout(printTimer);
-      window.clearTimeout(navigateTimer);
+      window.clearTimeout(followUpTimer);
     };
   }, [navigate, printingBill]);
 
@@ -623,6 +631,61 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   function openCloseBill() {
     setCloseError(null);
     setShowCloseModal(true);
+  }
+
+  const allRequiredTicketsPrinted = useMemo(() => {
+    if (!openRounds.length) return false;
+    return openRounds.every((round) => {
+      const hasKitchen = getRoundTicketItems(round, "kitchen").length > 0;
+      const hasBar = getRoundTicketItems(round, "bar").length > 0;
+      const kitchenOk = !hasKitchen || ticketPrintedAt(round, "kitchen") !== null;
+      const barOk = !hasBar || ticketPrintedAt(round, "bar") !== null;
+      return kitchenOk && barOk;
+    });
+  }, [openRounds]);
+
+  function handleBillOut() {
+    if (!table || !openRounds.length) return;
+    setError(null);
+
+    const rounds: BillRound[] = openRounds.map((round) => ({
+      order_number: round.order_number,
+      or_number: round.or_number ?? "",
+      created_at: round.created_at,
+      subtotal: roundSubtotal(round),
+      items: (round.order_items ?? []).map((item) => ({
+        item_name: String(item.item_name ?? ""),
+        quantity: Number(item.quantity ?? 0),
+        unit_price: Number(item.unit_price ?? 0),
+        line_total: Number(item.line_total ?? 0),
+      })),
+    }));
+
+    const subtotal = runningSubtotal;
+    const vatRegistered = resolvedSettings.vat_registered;
+    const vatAmount = vatRegistered
+      ? round2((subtotal * resolvedSettings.vat_rate) / (100 + resolvedSettings.vat_rate))
+      : 0;
+    const vatableSales = vatRegistered ? round2(subtotal - vatAmount) : 0;
+
+    setPrintingBill({
+      table,
+      rounds,
+      subtotal,
+      vatableSales,
+      vatAmount,
+      vatExemptSales: 0,
+      seniorDiscount: 0,
+      total: subtotal,
+      paymentMethod: "",
+      amountReceived: 0,
+      change: 0,
+      seniorPwd: false,
+      seniorPwdId: null,
+      seniorPwdName: null,
+      settings: resolvedSettings,
+      isFinal: false,
+    });
   }
 
   async function handleConfirmCloseBill() {
@@ -753,15 +816,32 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   : "No open rounds yet."}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={openCloseBill}
-              disabled={!openRounds.length || roundsLoading || settingsLoading}
-              className="inline-flex h-11 items-center justify-center rounded-lg bg-[#ac312d] px-5 text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Close & Bill
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+              <button
+                type="button"
+                onClick={handleBillOut}
+                disabled={!openRounds.length || roundsLoading || settingsLoading}
+                className="inline-flex h-11 items-center justify-center rounded-lg border-2 border-[#c08643] bg-white px-5 text-sm font-bold uppercase tracking-wide text-[#c08643] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Bill Out
+              </button>
+              <button
+                type="button"
+                onClick={openCloseBill}
+                disabled={!openRounds.length || roundsLoading || settingsLoading || !allRequiredTicketsPrinted}
+                title={!allRequiredTicketsPrinted && openRounds.length ? "Print all kitchen and bar tickets first" : undefined}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-[#ac312d] px-5 text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Settle & Close
+              </button>
+            </div>
           </div>
+
+          {openRounds.length > 0 && !allRequiredTicketsPrinted && (
+            <div className="mb-2 rounded-lg border border-[#ac312d]/30 bg-[#ac312d]/5 p-2 text-xs font-semibold text-[#ac312d]">
+              Print all kitchen and bar tickets before this table can be settled.
+            </div>
+          )}
 
           {error && (
             <div className="mb-3 rounded-lg border border-[#ac312d]/30 bg-white p-3 text-sm font-semibold text-[#ac312d]">

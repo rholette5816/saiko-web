@@ -24,6 +24,7 @@ interface TableBillProps {
   seniorPwdName?: string | null;
   settings: BusinessSettings;
   cashierName?: string | null;
+  isFinal?: boolean;
 }
 
 const RECEIPT_LEGAL_NAME = "ALPHRICK FOOD VENTURES INC";
@@ -172,7 +173,7 @@ export function TableBill(props: TableBillProps) {
       <div className="center">Tel: {businessContact}</div>
 
       <div className="center divider">{divider("=")}</div>
-      <div className="center bold">PROVISIONAL RECEIPT</div>
+      <div className="center bold">{props.isFinal === false ? "BILL" : "PROVISIONAL RECEIPT"}</div>
       <div className="row">
         <span>Counter:</span>
         <span className="value">TABLE</span>
@@ -187,7 +188,7 @@ export function TableBill(props: TableBillProps) {
       </div>
       <div className="row">
         <span>P.Type:</span>
-        <span className="value">{paymentType.toUpperCase()}</span>
+        <span className="value">{props.isFinal === false ? "PENDING" : paymentType.toUpperCase()}</span>
       </div>
       <div className="row">
         <span>Cashier:</span>
@@ -258,18 +259,27 @@ export function TableBill(props: TableBillProps) {
       </div>
 
       <div className="center divider">{divider("=")}</div>
-      <div className="row">
-        <span>Tendered:</span>
-        <span className="value">{money(props.amountReceived)}</span>
-      </div>
-      <div className="row">
-        <span>Change:</span>
-        <span className="value">{money(props.change)}</span>
-      </div>
+      {props.isFinal !== false && (
+        <>
+          <div className="row">
+            <span>Tendered:</span>
+            <span className="value">{money(props.amountReceived)}</span>
+          </div>
+          <div className="row">
+            <span>Change:</span>
+            <span className="value">{money(props.change)}</span>
+          </div>
+        </>
+      )}
       <div className="row">
         <span>Item Count:</span>
         <span className="value">{itemCount}</span>
       </div>
+      {props.isFinal === false && (
+        <div className="center bold" style={{ marginTop: "6px" }}>
+          *** UNPAID BILL ***
+        </div>
+      )}
 
       {props.seniorPwd && (
         <>
@@ -290,9 +300,19 @@ export function TableBill(props: TableBillProps) {
       <div className="center">{props.settings.receipt_footer || "THANK YOU, COME AGAIN"}</div>
 
       <div className="center muted" style={{ marginTop: "8px" }}>
-        This is a provisional receipt for transaction
-        <br />
-        tracking only. Not a BIR Official Receipt.
+        {props.isFinal === false ? (
+          <>
+            BILL ONLY. PROVISIONAL.
+            <br />
+            Please review before settling.
+          </>
+        ) : (
+          <>
+            This is a provisional receipt for transaction
+            <br />
+            tracking only. Not a BIR Official Receipt.
+          </>
+        )}
       </div>
 
       <div className="center divider">{divider("=")}</div>
