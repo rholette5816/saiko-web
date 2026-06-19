@@ -77,8 +77,14 @@ function formatYmdInManila(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function manilaDayBoundaries(ymd: string): { startIso: string; endIso: string } {
-  const range = getCustomRange(ymd, ymd);
+function normalizeDateRange(startYmd: string, endYmd: string): { startYmd: string; endYmd: string } {
+  if (startYmd <= endYmd) return { startYmd, endYmd };
+  return { startYmd: endYmd, endYmd: startYmd };
+}
+
+function manilaRangeBoundaries(startYmd: string, endYmd: string): { startIso: string; endIso: string } {
+  const normalized = normalizeDateRange(startYmd, endYmd);
+  const range = getCustomRange(normalized.startYmd, normalized.endYmd);
   return { startIso: range.startIso, endIso: range.endIso };
 }
 
@@ -165,7 +171,8 @@ export default function AdminDailyReport() {
   const { activeCashier } = useActiveCashier();
   const { settings } = useBusinessSettings();
 
-  const [date, setDate] = useState(() => formatYmdInManila(new Date()));
+  const [startDate, setStartDate] = useState(() => formatYmdInManila(new Date()));
+  const [endDate, setEndDate] = useState(() => formatYmdInManila(new Date()));
   const [channel, setChannel] = useState<ChannelFilter>("counter");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("completed");
   const [productFilter, setProductFilter] = useState("all");
@@ -179,15 +186,11 @@ export default function AdminDailyReport() {
   const [thermalMode, setThermalMode] = useState(false);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
 
-  useEffect(() => {
-    setDate(formatYmdInManila(new Date()));
-  }, []);
-
   const loadReport = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    const { startIso, endIso } = manilaDayBoundaries(date);
+    const { startIso, endIso } = manilaRangeBoundaries(startDate, endDate);
 
     let query = supabase
       .from("orders")
@@ -210,11 +213,24 @@ export default function AdminDailyReport() {
     setOrdersWithItems((data ?? []) as OrderWithItems[]);
     setGeneratedAt(new Date());
     setLoading(false);
-  }, [channel, date]);
+  }, [channel, endDate, startDate]);
 
   useEffect(() => {
     loadReport();
   }, [loadReport]);
+
+  const normalizedDateRange = useMemo(
+    () => normalizeDateRange(startDate, endDate),
+    [endDate, startDate],
+  );
+  const reportDateLabel =
+    normalizedDateRange.startYmd === normalizedDateRange.endYmd
+      ? normalizedDateRange.startYmd
+      : `${normalizedDateRange.startYmd} to ${normalizedDateRange.endYmd}`;
+  const reportDateFilePart =
+    normalizedDateRange.startYmd === normalizedDateRange.endYmd
+      ? normalizedDateRange.startYmd
+      : `${normalizedDateRange.startYmd}-to-${normalizedDateRange.endYmd}`;
 
   const productOptions = useMemo(() => {
     const map = new Map<string, { key: string; name: string }>();
@@ -472,12 +488,12 @@ export default function AdminDailyReport() {
   }
 
   function handleExportCsv() {
-    const filename = `saiko-daily-${date}-${filenamePart(channel)}-${filenamePart(reportView)}.csv`;
+    const filename = `saiko-daily-${reportDateFilePart}-${filenamePart(channel)}-${filenamePart(reportView)}.csv`;
 
     if (reportView === "summary") {
       const rows: CsvCell[][] = [
         ["Business", settings?.business_name ?? "SAIKO RAMEN & SUSHI"],
-        ["Date", date],
+        ["Date Range", reportDateLabel],
         ["Generated", generatedAt?.toLocaleString("en-PH", { timeZone: "Asia/Manila" }) ?? ""],
         ["Cashier", activeCashier],
         ["Scope", activeFilterLabel],
@@ -584,17 +600,26 @@ export default function AdminDailyReport() {
 
         <div className="print-hide">
           <h1 className="text-2xl font-bold text-[#0d0f13]">Daily Report</h1>
-          <p className="text-sm text-[#705d48]">End-of-day Z-reading summary for cashier and accounting reconciliation.</p>
+          <p className="text-sm text-[#705d48]">Z-reading summary for the selected date range, cashier, and accounting reconciliation.</p>
         </div>
 
         <div className="bg-white rounded-lg p-4 space-y-4 print-hide">
-          <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_auto] gap-3 lg:items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[auto_auto_1fr_auto] gap-3 lg:items-end">
             <label className="text-xs font-semibold text-[#705d48]">
-              Date
+              Start Date
               <input
                 type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="block mt-1 w-full border border-[#d8d2cb] rounded-md px-2 py-2 text-sm text-[#0d0f13]"
+              />
+            </label>
+            <label className="text-xs font-semibold text-[#705d48]">
+              End Date
+              <input
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
                 className="block mt-1 w-full border border-[#d8d2cb] rounded-md px-2 py-2 text-sm text-[#0d0f13]"
               />
             </label>
@@ -786,7 +811,7 @@ export default function AdminDailyReport() {
               <p className="text-sm text-[#705d48]">
                 {settings?.is_bir_accredited ? "Z-READING" : "PROVISIONAL Z-READING"}
               </p>
-              <p className="text-sm text-[#705d48]">Date: {date}</p>
+              <p className="text-sm text-[#705d48]">Date Range: {reportDateLabel}</p>
               <p className="text-sm text-[#705d48]">
                 Generated: {generatedAt?.toLocaleString("en-PH", { timeZone: "Asia/Manila" }) ?? "N/A"}
               </p>
