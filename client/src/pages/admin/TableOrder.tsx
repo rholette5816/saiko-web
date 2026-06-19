@@ -1,6 +1,7 @@
 import { AdminLayout } from "@/components/AdminLayout";
 import { RoundTicket } from "@/components/RoundTicket";
 import { TableBill } from "@/components/TableBill";
+import { useAuth } from "@/lib/auth";
 import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
 import { menuData } from "@/lib/menuData";
@@ -313,10 +314,12 @@ function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSett
 export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [, navigate] = useLocation();
   const table = useMemo(() => getTable(tableId), [tableId]);
+  const { loading: authLoading, role } = useAuth();
   const { activeCashier } = useActiveCashier();
   const { settings, loading: settingsLoading } = useBusinessSettings();
   const resolvedSettings = settings ?? DEFAULT_SETTINGS;
   const cashierName = activeCashier;
+  const canManageBilling = !authLoading && role !== "staff";
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -330,6 +333,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [printingTicket, setPrintingTicket] = useState<TicketPayload | null>(null);
   const [activePrintKind, setActivePrintKind] = useState<TicketKind | null>(null);
   const [printingByTicket, setPrintingByTicket] = useState<Record<string, boolean>>({});
+  const [billingOut, setBillingOut] = useState(false);
   const [closing, setClosing] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeForm, setCloseForm] = useState<CloseFormState>({
@@ -629,6 +633,14 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   }
 
   function openCloseBill() {
+    if (!canManageBilling) {
+      setError("Only the cashier can settle this table.");
+      return;
+    }
+    if (!allRequiredTicketsPrinted) {
+      setError("Print all kitchen and bar tickets before settling this table.");
+      return;
+    }
     setCloseError(null);
     setShowCloseModal(true);
   }
@@ -644,9 +656,18 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     });
   }, [openRounds]);
 
-  function handleBillOut() {
-    if (!table || !openRounds.length) return;
+  async function handleBillOut() {
+    if (!table || !openRounds.length || billingOut) return;
     setError(null);
+    if (!canManageBilling) {
+      setError("Only the cashier can bill out this table.");
+      return;
+    }
+    if (!allRequiredTicketsPrinted) {
+      setError("Print all kitchen and bar tickets before bill out.");
+      return;
+    }
+    setBillingOut(true);
 
     const rounds: BillRound[] = openRounds.map((round) => ({
       order_number: round.order_number,
@@ -668,6 +689,18 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       : 0;
     const vatableSales = vatRegistered ? round2(subtotal - vatAmount) : 0;
 
+    const { error: billOutError } = await supabase
+      .from("orders")
+      .update({ status: "completed" })
+      .eq("table_number", table.id)
+      .in("status", ["preparing", "ready"]);
+
+    if (billOutError) {
+      setError(billOutError.message);
+      setBillingOut(false);
+      return;
+    }
+
     setPrintingBill({
       table,
       rounds,
@@ -686,14 +719,26 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       settings: resolvedSettings,
       isFinal: false,
     });
+    setBillingOut(false);
+    await loadRounds();
   }
 
   async function handleConfirmCloseBill() {
     if (!table || closing) return;
     setCloseError(null);
 
+    if (!canManageBilling) {
+      setCloseError("Only the cashier can settle this table.");
+      return;
+    }
+
     if (!openRounds.length) {
       setCloseError("There are no open rounds for this table.");
+      return;
+    }
+
+    if (!allRequiredTicketsPrinted) {
+      setCloseError("Print all kitchen and bar tickets before settling this table.");
       return;
     }
 
@@ -816,30 +861,33 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   : "No open rounds yet."}
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-              <button
-                type="button"
-                onClick={handleBillOut}
-                disabled={!openRounds.length || roundsLoading || settingsLoading}
-                className="inline-flex h-11 items-center justify-center rounded-lg border-2 border-[#c08643] bg-white px-5 text-sm font-bold uppercase tracking-wide text-[#c08643] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Bill Out
-              </button>
-              <button
-                type="button"
-                onClick={openCloseBill}
-                disabled={!openRounds.length || roundsLoading || settingsLoading || !allRequiredTicketsPrinted}
-                title={!allRequiredTicketsPrinted && openRounds.length ? "Print all kitchen and bar tickets first" : undefined}
-                className="inline-flex h-11 items-center justify-center rounded-lg bg-[#ac312d] px-5 text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Settle & Close
-              </button>
-            </div>
+            {canManageBilling && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                <button
+                  type="button"
+                  onClick={handleBillOut}
+                  disabled={!openRounds.length || roundsLoading || settingsLoading || billingOut || !allRequiredTicketsPrinted}
+                  title={!allRequiredTicketsPrinted && openRounds.length ? "Print all kitchen and bar tickets first" : undefined}
+                  className="inline-flex h-11 items-center justify-center rounded-lg border-2 border-[#c08643] bg-white px-5 text-sm font-bold uppercase tracking-wide text-[#c08643] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {billingOut ? "Completing..." : "Bill Out"}
+                </button>
+                <button
+                  type="button"
+                  onClick={openCloseBill}
+                  disabled={!openRounds.length || roundsLoading || settingsLoading || !allRequiredTicketsPrinted}
+                  title={!allRequiredTicketsPrinted && openRounds.length ? "Print all kitchen and bar tickets first" : undefined}
+                  className="inline-flex h-11 items-center justify-center rounded-lg bg-[#ac312d] px-5 text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Settle & Close
+                </button>
+              </div>
+            )}
           </div>
 
-          {openRounds.length > 0 && !allRequiredTicketsPrinted && (
+          {canManageBilling && openRounds.length > 0 && !allRequiredTicketsPrinted && (
             <div className="mb-2 rounded-lg border border-[#ac312d]/30 bg-[#ac312d]/5 p-2 text-xs font-semibold text-[#ac312d]">
-              Print all kitchen and bar tickets before this table can be settled.
+              Print all kitchen and bar tickets before this table can be billed out or settled.
             </div>
           )}
 
