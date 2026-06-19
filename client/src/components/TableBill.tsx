@@ -37,7 +37,7 @@ function money(value: number): string {
 }
 
 function divider(char = "-") {
-  return char.repeat(42);
+  return char.repeat(40);
 }
 
 function formatReceiptDate(value: Date | string) {
@@ -101,29 +101,32 @@ export function TableBill(props: TableBillProps) {
     <div className="table-bill">
       <style>{`
         .table-bill {
-          font-family: "Courier New", monospace;
+          font-family: Consolas, "Courier New", monospace;
           box-sizing: border-box;
-          width: 3in;
-          max-width: 3in;
+          width: 72mm;
+          max-width: 72mm;
           margin: 0 auto;
-          padding: 8px 9px 14px;
-          color: #0d0f13;
+          padding: 0 3mm 8mm;
+          color: #000000;
           background: white;
-          line-height: 1.22;
-          font-size: 11px;
+          line-height: 1.16;
+          font-size: 12px;
+          font-weight: 700;
+          -webkit-font-smoothing: none;
+          text-rendering: geometricPrecision;
         }
         .table-bill .center { text-align: center; }
-        .table-bill .heading { font-weight: 800; font-size: 13px; line-height: 1.15; }
-        .table-bill .row { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 6px; }
+        .table-bill .heading { font-weight: 900; font-size: 13px; line-height: 1.12; }
+        .table-bill .row { display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 4px; }
         .table-bill .row .value { text-align: right; }
-        .table-bill .bold { font-weight: 800; }
-        .table-bill .muted { color: #393939; }
-        .table-bill .divider { margin: 5px 0; color: #5a5a5a; overflow: hidden; white-space: nowrap; }
+        .table-bill .bold { font-weight: 900; }
+        .table-bill .muted { color: #000000; }
+        .table-bill .divider { margin: 4px 0; color: #000000; overflow: hidden; white-space: nowrap; }
         .table-bill .total { font-size: 14px; font-weight: 900; }
         .table-bill .item-name { min-width: 0; overflow-wrap: anywhere; }
         .table-bill .item-row {
           display: grid;
-          grid-template-columns: 28px minmax(0, 1fr) 78px;
+          grid-template-columns: 24px minmax(0, 1fr) 72px;
           gap: 4px;
           align-items: start;
         }
@@ -131,10 +134,19 @@ export function TableBill(props: TableBillProps) {
         .table-bill .item-amount { text-align: right; }
         @media print {
           @page { size: 3in auto; margin: 0; }
-          body { background: white !important; }
+          html, body, #root { margin: 0 !important; padding: 0 !important; width: 3in !important; background: white !important; }
           body * { visibility: hidden !important; }
           .table-bill, .table-bill * { visibility: visible !important; }
-          .table-bill { box-shadow: none !important; margin: 0 !important; width: 3in !important; max-width: 3in !important; }
+          .table-bill {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            width: 72mm !important;
+            max-width: 72mm !important;
+            padding-top: 0 !important;
+          }
         }
       `}</style>
 
