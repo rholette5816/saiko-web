@@ -12,7 +12,7 @@ interface RoundTicketProps {
 }
 
 function divider(char = "=") {
-  return char.repeat(40);
+  return char.repeat(38);
 }
 
 function formatDate(value: Date) {
@@ -49,47 +49,47 @@ export function RoundTicket(props: RoundTicketProps) {
           width: 72mm;
           max-width: 72mm;
           margin: 0 auto;
-          padding: 0 3mm 8mm;
+          padding: 0 3mm 2mm;
           color: #000000;
           background: white;
-          line-height: 1.14;
-          font-size: 13px;
+          line-height: 1.08;
+          font-size: 12px;
           font-weight: 700;
           -webkit-font-smoothing: none;
           text-rendering: geometricPrecision;
         }
         .round-ticket .center { text-align: center; }
-        .round-ticket .ticket-kind { font-size: 19px; font-weight: 900; line-height: 1.05; }
-        .round-ticket .table { font-size: 21px; font-weight: 900; line-height: 1.05; margin: 2px 0 5px; }
+        .round-ticket .ticket-kind { font-size: 17px; font-weight: 900; line-height: 1; }
+        .round-ticket .dine { font-size: 19px; font-weight: 900; line-height: 1; margin: 2px 0; }
         .round-ticket .bold { font-weight: 900; }
-        .round-ticket .divider { margin: 4px 0; overflow: hidden; white-space: nowrap; }
+        .round-ticket .divider { margin: 3px 0; overflow: hidden; white-space: nowrap; }
         .round-ticket .item-head {
           display: grid;
-          grid-template-columns: 42px minmax(0, 1fr);
-          gap: 7px;
-          font-size: 14px;
+          grid-template-columns: 36px minmax(0, 1fr);
+          gap: 6px;
+          font-size: 13px;
           font-weight: 900;
         }
         .round-ticket .item-row {
           display: grid;
-          grid-template-columns: 42px minmax(0, 1fr);
-          gap: 7px;
-          margin: 7px 0;
-          font-size: 19px;
+          grid-template-columns: 36px minmax(0, 1fr);
+          gap: 6px;
+          margin: 4px 0;
+          font-size: 17px;
           font-weight: 900;
-          line-height: 1.05;
+          line-height: 1.02;
         }
         .round-ticket .qty { text-align: right; }
         .round-ticket .desc { min-width: 0; overflow-wrap: anywhere; }
-        .round-ticket .notes { margin-top: 8px; font-size: 15px; font-weight: 900; }
-        .round-ticket .footer-time { margin-top: 5px; font-size: 13px; }
+        .round-ticket .notes { margin-top: 5px; font-size: 13px; font-weight: 900; }
+        .round-ticket .footer-time { margin-top: 3px; font-size: 12px; }
         @media print {
-          @page { size: 3in auto; margin: 0; }
-          html, body, #root { margin: 0 !important; padding: 0 !important; width: 3in !important; background: white !important; }
+          @page { size: 3in 95mm; margin: 0; }
+          html, body, #root { margin: 0 !important; padding: 0 !important; width: 3in !important; min-height: 0 !important; background: white !important; }
           body * { visibility: hidden !important; }
           .round-ticket, .round-ticket * { visibility: visible !important; }
           .round-ticket {
-            position: fixed !important;
+            position: absolute !important;
             top: 0 !important;
             left: 0 !important;
             box-shadow: none !important;
@@ -101,15 +101,13 @@ export function RoundTicket(props: RoundTicketProps) {
         }
       `}</style>
 
-      <div className="center ticket-kind">{ticketLabel}</div>
-      <div className="center table">
-        TABLE {props.tableNumber} ({props.capacity})
+      <div className="center ticket-kind">
+        {ticketLabel} TABLE {props.tableNumber}
       </div>
       <div>Order No.:{props.orderNumber}</div>
-      <div>OR No.:{props.orNumber || "N/A"}</div>
       <div>Cashier:{cashierName}</div>
       <div>Waiter:{waiterName}</div>
-      <div className="center table">DINE IN</div>
+      <div className="center dine">DINE IN</div>
 
       <div className="divider">{divider("=")}</div>
       <div className="item-head">

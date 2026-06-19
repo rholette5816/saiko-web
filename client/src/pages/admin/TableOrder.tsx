@@ -135,6 +135,7 @@ interface BillPayload {
 
 const WAITER_OPTIONS = ["Anfernee", "Angeline", "Bell", "Carin", "Kikay", "Sadam", "Melinda", "Shy"];
 const WAITER_NOTE_PREFIX = "[waiter:";
+const PRINT_NOTE_PREFIX = "[printed:";
 
 const DEFAULT_SETTINGS: BusinessSettings = {
   id: "default",
@@ -166,27 +167,74 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function splitRoundNotes(value: string | null | undefined): { waiterName: string; notes: string } {
-  const raw = value ?? "";
-  const lines = raw.split(/\r?\n/);
-  const first = lines[0]?.trim() ?? "";
-
-  if (first.toLowerCase().startsWith(WAITER_NOTE_PREFIX) && first.endsWith("]")) {
-    return {
-      waiterName: first.slice(WAITER_NOTE_PREFIX.length, -1).trim(),
-      notes: lines.slice(1).join("\n").trim(),
-    };
-  }
-
-  return { waiterName: "", notes: raw.trim() };
+interface TicketPrintStatus {
+  printedAt: string | null;
+  count: number;
 }
 
-function composeRoundNotes(waiterName: string, notes: string): string | null {
+interface RoundNoteMetadata {
+  waiterName: string;
+  notes: string;
+  printStatus: Record<TicketKind, TicketPrintStatus>;
+}
+
+function emptyPrintStatus(): Record<TicketKind, TicketPrintStatus> {
+  return {
+    kitchen: { printedAt: null, count: 0 },
+    bar: { printedAt: null, count: 0 },
+  };
+}
+
+function parseRoundNotes(value: string | null | undefined): RoundNoteMetadata {
+  const printStatus = emptyPrintStatus();
+  const noteLines: string[] = [];
+  let waiterName = "";
+
+  (value ?? "").split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (lower.startsWith(WAITER_NOTE_PREFIX) && trimmed.endsWith("]")) {
+      waiterName = trimmed.slice(WAITER_NOTE_PREFIX.length, -1).trim();
+      return;
+    }
+
+    if (lower.startsWith(PRINT_NOTE_PREFIX) && trimmed.endsWith("]")) {
+      const [kind, printedAt, count] = trimmed.slice(PRINT_NOTE_PREFIX.length, -1).split("|");
+      if (kind === "kitchen" || kind === "bar") {
+        printStatus[kind] = {
+          printedAt: printedAt || null,
+          count: Number(count ?? 0),
+        };
+        return;
+      }
+    }
+
+    noteLines.push(line);
+  });
+
+  return { waiterName, notes: noteLines.join("\n").trim(), printStatus };
+}
+
+function splitRoundNotes(value: string | null | undefined): { waiterName: string; notes: string } {
+  const metadata = parseRoundNotes(value);
+  return { waiterName: metadata.waiterName, notes: metadata.notes };
+}
+
+function composeRoundNotes(
+  waiterName: string,
+  notes: string,
+  printStatus: Record<TicketKind, TicketPrintStatus> = emptyPrintStatus(),
+): string | null {
   const cleanWaiter = waiterName.trim();
   const cleanNotes = notes.trim();
   const parts: string[] = [];
 
   if (cleanWaiter) parts.push(`[waiter:${cleanWaiter}]`);
+  (["kitchen", "bar"] as TicketKind[]).forEach((kind) => {
+    const status = printStatus[kind];
+    if (status.printedAt) parts.push(`[printed:${kind}|${status.printedAt}|${status.count}]`);
+  });
   if (cleanNotes) parts.push(cleanNotes);
 
   return parts.length ? parts.join("\n") : null;
@@ -209,12 +257,14 @@ function formatTime(value: string | Date): string {
 }
 
 function ticketPrintedAt(round: RoundWithItems, kind: TicketKind): string | null {
-  return kind === "kitchen" ? round.kitchen_ticket_printed_at ?? null : round.bar_ticket_printed_at ?? null;
+  const raw = kind === "kitchen" ? round.kitchen_ticket_printed_at : round.bar_ticket_printed_at;
+  return raw ?? parseRoundNotes(round.notes).printStatus[kind].printedAt;
 }
 
 function ticketPrintCount(round: RoundWithItems, kind: TicketKind): number {
   const raw = kind === "kitchen" ? round.kitchen_ticket_print_count : round.bar_ticket_print_count;
-  return Number(raw ?? 0);
+  const columnCount = Number(raw ?? 0);
+  return columnCount > 0 ? columnCount : parseRoundNotes(round.notes).printStatus[kind].count;
 }
 
 function ticketKey(orderId: string, kind: TicketKind): string {
@@ -420,16 +470,18 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
   async function markTicketPrinted(orderId: string, kind: TicketKind) {
     const round = openRounds.find((item) => item.id === orderId);
-    const nextCount = round ? ticketPrintCount(round, kind) + 1 : 1;
+    if (!round) return;
+
     const printedAt = new Date().toISOString();
-    const update =
-      kind === "kitchen"
-        ? { kitchen_ticket_printed_at: printedAt, kitchen_ticket_print_count: nextCount }
-        : { bar_ticket_printed_at: printedAt, bar_ticket_print_count: nextCount };
+    const metadata = parseRoundNotes(round.notes);
+    metadata.printStatus[kind] = {
+      printedAt,
+      count: ticketPrintCount(round, kind) + 1,
+    };
 
     const { error: markError } = await supabase
       .from("orders")
-      .update(update)
+      .update({ notes: composeRoundNotes(metadata.waiterName, metadata.notes, metadata.printStatus) })
       .eq("id", orderId);
 
     if (markError) {
@@ -667,8 +719,17 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         <style>{`
           .print-tickets-root, .print-bill-root { display: none; }
           @media print {
+            html, body, #root { margin: 0 !important; padding: 0 !important; width: 3in !important; min-height: 0 !important; background: white !important; }
             .table-order-screen { display: none !important; }
-            .print-tickets-root, .print-bill-root { display: block !important; }
+            .print-tickets-root, .print-bill-root {
+              display: block !important;
+              position: absolute !important;
+              top: 0 !important;
+              left: 0 !important;
+              width: 3in !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
           }
         `}</style>
 
