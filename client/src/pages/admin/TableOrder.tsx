@@ -383,10 +383,18 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   }
 
   async function markTicketPrinted(orderId: string, kind: TicketKind) {
-    const { error: markError } = await supabase.rpc("mark_table_ticket_printed", {
-      p_order_id: orderId,
-      p_kind: kind,
-    });
+    const round = openRounds.find((item) => item.id === orderId);
+    const nextCount = round ? ticketPrintCount(round, kind) + 1 : 1;
+    const printedAt = new Date().toISOString();
+    const update =
+      kind === "kitchen"
+        ? { kitchen_ticket_printed_at: printedAt, kitchen_ticket_print_count: nextCount }
+        : { bar_ticket_printed_at: printedAt, bar_ticket_print_count: nextCount };
+
+    const { error: markError } = await supabase
+      .from("orders")
+      .update(update)
+      .eq("id", orderId);
 
     if (markError) {
       setError(markError.message);
