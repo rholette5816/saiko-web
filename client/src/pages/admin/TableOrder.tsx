@@ -675,6 +675,10 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       setError("Print all kitchen and bar tickets before bill out.");
       return;
     }
+    if (hasBilledOut) {
+      setError("This table has already been billed out. Settle it to close.");
+      return;
+    }
     setBillingOut(true);
 
     const rounds: BillRound[] = openRounds.map((round) => ({
@@ -868,8 +872,14 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                 <button
                   type="button"
                   onClick={handleBillOut}
-                  disabled={!openRounds.length || roundsLoading || settingsLoading || billingOut || !allRequiredTicketsPrinted}
-                  title={!allRequiredTicketsPrinted && openRounds.length ? "Print all kitchen and bar tickets first" : undefined}
+                  disabled={!openRounds.length || roundsLoading || settingsLoading || billingOut || !allRequiredTicketsPrinted || hasBilledOut}
+                  title={
+                    hasBilledOut
+                      ? "This table has already been billed out"
+                      : !allRequiredTicketsPrinted && openRounds.length
+                        ? "Print all kitchen and bar tickets first"
+                        : undefined
+                  }
                   className="inline-flex h-11 items-center justify-center rounded-lg border-2 border-[#c08643] bg-white px-5 text-sm font-bold uppercase tracking-wide text-[#c08643] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {billingOut ? "Printing..." : "Bill Out"}

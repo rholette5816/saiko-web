@@ -1,5 +1,7 @@
 import type { OrderItemRow, OrderRow } from "@/lib/supabase";
 
+export type CsvCell = string | number | boolean | null | undefined;
+
 function escapeCsvField(value: string): string {
   const normalized = value.replace(/"/g, "\"\"");
   if (/[",\r\n]/.test(normalized)) return `"${normalized}"`;
@@ -33,6 +35,10 @@ export function exportOrdersToCsv(orders: (OrderRow & { items?: OrderItemRow[] }
     new Date(order.created_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" }),
   ]);
 
+  exportRowsToCsv(headers, rows, filename);
+}
+
+export function exportRowsToCsv(headers: string[], rows: CsvCell[][], filename: string): void {
   const csv = [headers, ...rows]
     .map((row) => row.map((value) => escapeCsvField(String(value ?? ""))).join(","))
     .join("\r\n");
