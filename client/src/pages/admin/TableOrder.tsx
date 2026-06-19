@@ -2,6 +2,7 @@ import { AdminLayout } from "@/components/AdminLayout";
 import { RoundTicket } from "@/components/RoundTicket";
 import { TableBill } from "@/components/TableBill";
 import { useBusinessSettings } from "@/lib/businessSettings";
+import { useAuth } from "@/lib/auth";
 import { menuData } from "@/lib/menuData";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { getTable, type TableDef } from "@/lib/tables";
@@ -74,6 +75,7 @@ interface TicketPayload {
   kitchenItems: { name: string; quantity: number }[];
   barItems: { name: string; quantity: number }[];
   notes: string;
+  waiterName: string;
   createdAt: Date;
 }
 
@@ -131,6 +133,9 @@ interface BillPayload {
   settings: BusinessSettings;
 }
 
+const WAITER_OPTIONS = ["Anfernee", "Angeline", "Bell", "Carin", "Kikay", "Sadam", "Melinda", "Shy"];
+const WAITER_NOTE_PREFIX = "[waiter:";
+
 const DEFAULT_SETTINGS: BusinessSettings = {
   id: "default",
   business_name: "SAIKO RAMEN & SUSHI",
@@ -159,6 +164,32 @@ function normalize(value: string): string {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function splitRoundNotes(value: string | null | undefined): { waiterName: string; notes: string } {
+  const raw = value ?? "";
+  const lines = raw.split(/\r?\n/);
+  const first = lines[0]?.trim() ?? "";
+
+  if (first.toLowerCase().startsWith(WAITER_NOTE_PREFIX) && first.endsWith("]")) {
+    return {
+      waiterName: first.slice(WAITER_NOTE_PREFIX.length, -1).trim(),
+      notes: lines.slice(1).join("\n").trim(),
+    };
+  }
+
+  return { waiterName: "", notes: raw.trim() };
+}
+
+function composeRoundNotes(waiterName: string, notes: string): string | null {
+  const cleanWaiter = waiterName.trim();
+  const cleanNotes = notes.trim();
+  const parts: string[] = [];
+
+  if (cleanWaiter) parts.push(`[waiter:${cleanWaiter}]`);
+  if (cleanNotes) parts.push(cleanNotes);
+
+  return parts.length ? parts.join("\n") : null;
 }
 
 function roundSubtotal(round: RoundWithItems): number {
@@ -231,13 +262,16 @@ function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSett
 export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [, navigate] = useLocation();
   const table = useMemo(() => getTable(tableId), [tableId]);
+  const { session } = useAuth();
   const { settings, loading: settingsLoading } = useBusinessSettings();
   const resolvedSettings = settings ?? DEFAULT_SETTINGS;
+  const cashierName = session?.user?.email?.split("@")[0] ?? "admin";
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [orderItems, setOrderItems] = useState<TableCartItem[]>([]);
   const [notes, setNotes] = useState("");
+  const [waiterName, setWaiterName] = useState("");
   const [openRounds, setOpenRounds] = useState<RoundWithItems[]>([]);
   const [roundsLoading, setRoundsLoading] = useState(true);
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
@@ -370,6 +404,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
   function buildRoundTicketPayload(round: RoundWithItems): TicketPayload {
     if (!table) throw new Error("Table is required");
+    const roundNotes = splitRoundNotes(round.notes);
     return {
       orderId: round.id,
       table,
@@ -377,7 +412,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       orNumber: round.or_number ?? "",
       kitchenItems: getRoundTicketItems(round, "kitchen"),
       barItems: getRoundTicketItems(round, "bar"),
-      notes: round.notes ?? "",
+      notes: roundNotes.notes,
+      waiterName: roundNotes.waiterName,
       createdAt: new Date(round.created_at),
     };
   }
@@ -487,13 +523,18 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
   async function handleSubmitRound() {
     if (!table || !orderItems.length || submittingRound) return;
+    const selectedWaiter = waiterName.trim();
+    if (!selectedWaiter) {
+      setError("Choose a waiter before submitting this round.");
+      return;
+    }
     setSubmittingRound(true);
     setError(null);
 
     const { data, error: rpcError } = await supabase.rpc("place_table_round", {
       p_table_number: table.id,
       p_subtotal: currentSubtotal,
-      p_notes: notes.trim() || null,
+      p_notes: composeRoundNotes(selectedWaiter, notes),
       p_items: orderItems.map((item) => ({
         item_id: item.id,
         item_name: item.name,
@@ -813,6 +854,22 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                 </div>
 
                 <div className="mt-3">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Waiter</label>
+                  <select
+                    value={waiterName}
+                    onChange={(event) => setWaiterName(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-[#d8d2cb] bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose waiter</option>
+                    {WAITER_OPTIONS.map((waiter) => (
+                      <option key={waiter} value={waiter}>
+                        {waiter}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mt-3">
                   <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Round Notes</label>
                   <textarea
                     value={notes}
@@ -831,7 +888,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   <button
                     type="button"
                     onClick={handleSubmitRound}
-                    disabled={!orderItems.length || submittingRound}
+                    disabled={!orderItems.length || submittingRound || !waiterName.trim()}
                     className="h-11 w-full rounded-lg bg-[#ac312d] text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {submittingRound ? "Submitting..." : "Submit Round"}
@@ -999,6 +1056,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               orNumber={printingTicket.orNumber}
               items={printingTicket.kitchenItems}
               notes={printingTicket.notes || undefined}
+              waiterName={printingTicket.waiterName}
+              cashierName={cashierName}
               createdAt={printingTicket.createdAt}
             />
           </div>
@@ -1014,6 +1073,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               orNumber={printingTicket.orNumber}
               items={printingTicket.barItems}
               notes={printingTicket.notes || undefined}
+              waiterName={printingTicket.waiterName}
+              cashierName={cashierName}
               createdAt={printingTicket.createdAt}
             />
           </div>
@@ -1037,6 +1098,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               seniorPwdId={printingBill.seniorPwdId}
               seniorPwdName={printingBill.seniorPwdName}
               settings={printingBill.settings}
+              cashierName={cashierName}
             />
           </div>
         )}

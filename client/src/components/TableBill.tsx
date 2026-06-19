@@ -23,7 +23,14 @@ interface TableBillProps {
   seniorPwdId?: string | null;
   seniorPwdName?: string | null;
   settings: BusinessSettings;
+  cashierName?: string | null;
 }
+
+const RECEIPT_LEGAL_NAME = "ALPHRICK FOOD VENTURES INC";
+const RECEIPT_DEFAULT_ADDRESS = "PULO MAESTRA VITA, OTON, ILOILO";
+const RECEIPT_DEFAULT_TIN = "604-863-765-000";
+const RECEIPT_SN = "592052438019055";
+const RECEIPT_MIN = "2301191829346437";
 
 interface CombinedBillItem {
   item_name: string;
@@ -89,8 +96,13 @@ function combineItems(rounds: TableBillProps["rounds"]): CombinedBillItem[] {
 }
 
 export function TableBill(props: TableBillProps) {
-  const isOfficial = props.settings.is_bir_accredited;
   const printedAt = new Date();
+  const businessName = props.settings.business_name || "SAIKO RAMEN & SUSHI";
+  const businessAddress = props.settings.business_address || RECEIPT_DEFAULT_ADDRESS;
+  const businessTin = props.settings.business_tin || RECEIPT_DEFAULT_TIN;
+  const businessContact = props.settings.business_contact || "N/A";
+  const cashierName = props.cashierName || "admin";
+  const addressLines = businessAddress.split(/\r?\n/).filter(Boolean);
   const orderRange = rangeLabel(props.rounds.map((round) => round.order_number).filter(Boolean));
   const orRange = rangeLabel(props.rounds.map((round) => round.or_number).filter(Boolean));
   const paymentType = props.paymentMethod || "cash";
@@ -150,13 +162,20 @@ export function TableBill(props: TableBillProps) {
         }
       `}</style>
 
-      <div className="center heading">{props.settings.business_name || "SAIKO RAMEN & SUSHI"}</div>
-      <div className="center">TIN: {props.settings.business_tin || "___"}</div>
-      <div className="center">{props.settings.business_address || "Address not set"}</div>
-      <div className="center">Tel: {props.settings.business_contact || "N/A"}</div>
+      <div className="center heading">{businessName}</div>
+      {addressLines.map((line, index) => (
+        <div key={`${line}-${index}`} className="center">
+          {line}
+        </div>
+      ))}
+      <div className="center">{RECEIPT_LEGAL_NAME}</div>
+      <div className="center">TIN #: {businessTin}</div>
+      <div className="center">SN #: {RECEIPT_SN}</div>
+      <div className="center">MIN:{RECEIPT_MIN}</div>
+      <div className="center">Tel: {businessContact}</div>
 
       <div className="center divider">{divider("=")}</div>
-      <div className="center bold">{isOfficial ? "OFFICIAL RECEIPT" : "PROVISIONAL RECEIPT"}</div>
+      <div className="center bold">PROVISIONAL RECEIPT</div>
       <div className="row">
         <span>Counter:</span>
         <span className="value">TABLE</span>
@@ -175,7 +194,7 @@ export function TableBill(props: TableBillProps) {
       </div>
       <div className="row">
         <span>Cashier:</span>
-        <span className="value">admin</span>
+        <span className="value">{cashierName}</span>
       </div>
       <div className="center divider">{divider("=")}</div>
       <div className="row">
@@ -273,13 +292,11 @@ export function TableBill(props: TableBillProps) {
       <div className="divider">{divider("-")}</div>
       <div className="center">{props.settings.receipt_footer || "THANK YOU, COME AGAIN"}</div>
 
-      {!isOfficial && (
-        <div className="center muted" style={{ marginTop: "8px" }}>
-          This is a provisional receipt for transaction
-          <br />
-          tracking only. Not a BIR Official Receipt.
-        </div>
-      )}
+      <div className="center muted" style={{ marginTop: "8px" }}>
+        This is a provisional receipt for transaction
+        <br />
+        tracking only. Not a BIR Official Receipt.
+      </div>
 
       <div className="center divider">{divider("=")}</div>
     </div>
