@@ -132,7 +132,7 @@ interface BillPayload {
   seniorPwdId?: string | null;
   seniorPwdName?: string | null;
   settings: BusinessSettings;
-  isFinal?: boolean;
+  isFinal: boolean;
 }
 
 const WAITER_OPTIONS = ["Anfernee", "Angeline", "Bell", "Carin", "Kikay", "Sadam", "Melinda", "Shy"];
@@ -308,6 +308,7 @@ function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSett
     seniorPwdId: raw.senior_pwd_id ?? null,
     seniorPwdName: raw.senior_pwd_name ?? null,
     settings,
+    isFinal: true,
   };
 }
 
@@ -1304,6 +1305,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               seniorPwdName={printingBill.seniorPwdName}
               settings={printingBill.settings}
               cashierName={cashierName}
+              isFinal={printingBill.isFinal}
             />
           </div>
         )}

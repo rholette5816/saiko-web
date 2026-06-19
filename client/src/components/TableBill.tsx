@@ -24,7 +24,7 @@ interface TableBillProps {
   seniorPwdName?: string | null;
   settings: BusinessSettings;
   cashierName?: string | null;
-  isFinal?: boolean;
+  isFinal: boolean;
 }
 
 const RECEIPT_LEGAL_NAME = "ALPHRICK FOOD VENTURES INC";
@@ -173,7 +173,7 @@ export function TableBill(props: TableBillProps) {
       <div className="center">Tel: {businessContact}</div>
 
       <div className="center divider">{divider("=")}</div>
-      <div className="center bold">{props.isFinal === false ? "BILLOUT RECEIPT" : "PROVISIONAL RECEIPT"}</div>
+      <div className="center bold">{props.isFinal === false ? "BILLOUT RECEIPT" : "SALES RECEIPT"}</div>
       <div className="row">
         <span>Counter:</span>
         <span className="value">TABLE</span>
@@ -308,7 +308,7 @@ export function TableBill(props: TableBillProps) {
           </>
         ) : (
           <>
-            This is a provisional receipt for transaction
+            This is a sales receipt for transaction
             <br />
             tracking only. Not a BIR Official Receipt.
           </>
