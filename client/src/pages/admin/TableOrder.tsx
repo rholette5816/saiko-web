@@ -689,18 +689,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       : 0;
     const vatableSales = vatRegistered ? round2(subtotal - vatAmount) : 0;
 
-    const { error: billOutError } = await supabase
-      .from("orders")
-      .update({ status: "completed" })
-      .eq("table_number", table.id)
-      .in("status", ["preparing", "ready"]);
-
-    if (billOutError) {
-      setError(billOutError.message);
-      setBillingOut(false);
-      return;
-    }
-
     setPrintingBill({
       table,
       rounds,
@@ -870,7 +858,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   title={!allRequiredTicketsPrinted && openRounds.length ? "Print all kitchen and bar tickets first" : undefined}
                   className="inline-flex h-11 items-center justify-center rounded-lg border-2 border-[#c08643] bg-white px-5 text-sm font-bold uppercase tracking-wide text-[#c08643] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {billingOut ? "Completing..." : "Bill Out"}
+                  {billingOut ? "Printing..." : "Bill Out"}
                 </button>
                 <button
                   type="button"

@@ -173,7 +173,7 @@ export function TableBill(props: TableBillProps) {
       <div className="center">Tel: {businessContact}</div>
 
       <div className="center divider">{divider("=")}</div>
-      <div className="center bold">{props.isFinal === false ? "BILL" : "PROVISIONAL RECEIPT"}</div>
+      <div className="center bold">{props.isFinal === false ? "BILLOUT RECEIPT" : "PROVISIONAL RECEIPT"}</div>
       <div className="row">
         <span>Counter:</span>
         <span className="value">TABLE</span>
@@ -277,7 +277,7 @@ export function TableBill(props: TableBillProps) {
       </div>
       {props.isFinal === false && (
         <div className="center bold" style={{ marginTop: "6px" }}>
-          *** UNPAID BILL ***
+          *** BILL OUT ONLY ***
         </div>
       )}
 
@@ -302,7 +302,7 @@ export function TableBill(props: TableBillProps) {
       <div className="center muted" style={{ marginTop: "8px" }}>
         {props.isFinal === false ? (
           <>
-            BILL ONLY. PROVISIONAL.
+            BILLOUT RECEIPT ONLY.
             <br />
             Please review before settling.
           </>
