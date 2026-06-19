@@ -1,13 +1,16 @@
 import { AdminLayout } from "@/components/AdminLayout";
 import { CounterReceipt } from "@/components/CounterReceipt";
+import { RoundTicket } from "@/components/RoundTicket";
 import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
 import { menuData } from "@/lib/menuData";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
-import { Minus, Plus, Search, Trash2 } from "lucide-react";
+import { Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type PaymentMethod = "cash" | "gcash" | "card";
+type TicketKind = "kitchen" | "bar";
+type CounterServiceType = "dine-in" | "takeout";
 type DiscountType = "none" | "senior" | "pwd" | "employee" | "friends" | "custom";
 
 const DISCOUNT_PRESETS: Record<DiscountType, { label: string; defaultPct: number; requiresId: boolean }> = {
@@ -33,6 +36,7 @@ interface CounterOrderItem {
   price: number;
   quantity: number;
   image?: string;
+  categoryId: string;
 }
 
 interface CompletedOrder {
@@ -55,8 +59,22 @@ interface CompletedOrder {
   discountAmount: number;
   discountIdNumber: string | null;
   discountHolderName: string | null;
+  serviceType: CounterServiceType;
+  kitchenTicketPrintedAt: Date | null;
+  kitchenTicketPrintCount: number;
+  barTicketPrintedAt: Date | null;
+  barTicketPrintCount: number;
 }
 
+interface CounterTicketPayload {
+  orderNumber: string;
+  orNumber: string | null;
+  items: { name: string; quantity: number }[];
+  notes: string;
+  customer: string;
+  serviceType: CounterServiceType;
+  createdAt: Date;
+}
 interface PlaceCounterOrderRow {
   order_id: string;
   order_number: string;
@@ -96,6 +114,17 @@ function normalize(value: string): string {
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
+function serviceLabel(type: CounterServiceType): string {
+  return type === "dine-in" ? "DINE IN" : "TAKEOUT / PICKUP";
+}
+
+function formatTicketTime(value: Date): string {
+  return value.toLocaleTimeString("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 export default function AdminCounter() {
   const { activeCashier } = useActiveCashier();
@@ -115,8 +144,12 @@ export default function AdminCounter() {
   const [discountIdNumber, setDiscountIdNumber] = useState("");
   const [discountHolderName, setDiscountHolderName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [printingOrder, setPrintingOrder] = useState<CompletedOrder | null>(null);
+  const [printingTicket, setPrintingTicket] = useState<CounterTicketPayload | null>(null);
+  const [activeTicketKind, setActiveTicketKind] = useState<TicketKind | null>(null);
+  const [printingByTicket, setPrintingByTicket] = useState<Record<TicketKind, boolean>>({ kitchen: false, bar: false });
   const [lastCompletedOrder, setLastCompletedOrder] = useState<CompletedOrder | null>(null);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
 
@@ -197,7 +230,7 @@ export default function AdminCounter() {
     };
   }, [printingOrder]);
 
-  function addToOrder(item: { id: string; name: string; price: number; image?: string }) {
+  function addToOrder(item: { id: string; name: string; price: number; image?: string; categoryId: string }) {
     setOrderItems((cur) => {
       const existing = cur.find((it) => it.id === item.id);
       if (existing) {
@@ -221,6 +254,96 @@ export default function AdminCounter() {
     setOrderItems((cur) => cur.filter((item) => item.id !== itemId));
   }
 
+  function getCounterTicketItems(items: CounterOrderItem[], kind: TicketKind) {
+    return items
+      .filter((item) => (kind === "bar" ? item.categoryId === "drinks" : item.categoryId !== "drinks"))
+      .map((item) => ({ name: item.name, quantity: item.quantity }))
+      .filter((item) => item.quantity > 0);
+  }
+
+  function markCounterTicketPrinted(orderNumber: string, kind: TicketKind) {
+    const printedAt = new Date();
+    setLastCompletedOrder((current) => {
+      if (!current || current.orderNumber !== orderNumber) return current;
+      if (kind === "kitchen") {
+        return {
+          ...current,
+          kitchenTicketPrintedAt: printedAt,
+          kitchenTicketPrintCount: current.kitchenTicketPrintCount + 1,
+        };
+      }
+      return {
+        ...current,
+        barTicketPrintedAt: printedAt,
+        barTicketPrintCount: current.barTicketPrintCount + 1,
+      };
+    });
+  }
+
+  function printCounterTicket(order: CompletedOrder, kind: TicketKind) {
+    const items = getCounterTicketItems(order.items, kind);
+    if (items.length === 0) return;
+
+    const previousTitle = document.title;
+    setPrintingOrder(null);
+    document.title = kind === "kitchen" ? "KITCHEN TICKET" : "BAR TICKET";
+    setPrintingByTicket((current) => ({ ...current, [kind]: true }));
+    setPrintingTicket({
+      orderNumber: order.orderNumber,
+      orNumber: order.orNumber,
+      items,
+      notes: order.notes,
+      customer: order.customer,
+      serviceType: order.serviceType,
+      createdAt: order.createdAt,
+    });
+    setActiveTicketKind(kind);
+
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(() => {
+        document.title = previousTitle;
+        setPrintingTicket(null);
+        setActiveTicketKind(null);
+        setPrintingByTicket((current) => ({ ...current, [kind]: false }));
+        markCounterTicketPrinted(order.orderNumber, kind);
+      }, 600);
+    }, 300);
+  }
+
+  function renderCounterTicketAction(order: CompletedOrder, kind: TicketKind) {
+    const items = getCounterTicketItems(order.items, kind);
+    if (items.length === 0) return null;
+
+    const label = kind === "kitchen" ? "Kitchen" : "Bar";
+    const printedAt = kind === "kitchen" ? order.kitchenTicketPrintedAt : order.barTicketPrintedAt;
+    const printCount = kind === "kitchen" ? order.kitchenTicketPrintCount : order.barTicketPrintCount;
+    const isPrinting = printingByTicket[kind];
+    const statusText = printedAt ? `Printed ${formatTicketTime(printedAt)}${printCount > 1 ? ` (${printCount}x)` : ""}` : "Pending";
+
+    return (
+      <div className="flex flex-col gap-1 rounded-md border border-[#d8d2cb] bg-white px-2 py-1.5">
+        <span className={`text-[11px] font-bold ${printedAt ? "text-[#2d7a3e]" : "text-[#ac312d]"}`}>{statusText}</span>
+        <button
+          type="button"
+          onClick={() => printCounterTicket(order, kind)}
+          disabled={isPrinting}
+          className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${
+            kind === "kitchen" ? "bg-[#ac312d] text-white" : "bg-[#c08643] text-white"
+          } disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          {isPrinting ? "Printing..." : printedAt ? `Reprint ${label}` : `Submit ${label}`}
+        </button>
+      </div>
+    );
+  }
+
+  function openServiceModal() {
+    if (!orderItems.length || submitting) return;
+    setError(null);
+    setServiceModalOpen(true);
+  }
+
   function resetForm(withConfirm = true) {
     if (withConfirm && orderItems.length > 0) {
       const ok = window.confirm("Clear current order?");
@@ -237,10 +360,12 @@ export default function AdminCounter() {
     setDiscountIdNumber("");
     setDiscountHolderName("");
     setError(null);
+    setServiceModalOpen(false);
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(serviceType: CounterServiceType) {
     if (!orderItems.length || submitting) return;
+    setServiceModalOpen(false);
     setSubmitting(true);
     setError(null);
 
@@ -317,6 +442,11 @@ export default function AdminCounter() {
       discountAmount: Number(row?.senior_pwd_discount ?? pricing.discountAmount),
       discountIdNumber: DISCOUNT_PRESETS[discountType].requiresId ? discountIdNumber.trim() : null,
       discountHolderName: DISCOUNT_PRESETS[discountType].requiresId ? discountHolderName.trim() : null,
+      serviceType,
+      kitchenTicketPrintedAt: null,
+      kitchenTicketPrintCount: 0,
+      barTicketPrintedAt: null,
+      barTicketPrintCount: 0,
     };
 
     setPrintingOrder(completed);
@@ -578,7 +708,7 @@ export default function AdminCounter() {
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={openServiceModal}
             disabled={!orderItems.length || submitting || settingsLoading}
             className="h-10 rounded-lg bg-[#ac312d] text-white font-bold uppercase tracking-wide text-xs md:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -600,10 +730,10 @@ export default function AdminCounter() {
     <AdminLayout>
       <section className="space-y-3 md:h-[calc(100vh-10.5rem)] md:overflow-hidden">
         <style>{`
-          .print-receipt-root { display: none; }
+          .print-receipt-root, .print-ticket-root { display: none; }
           @media print {
             .counter-screen { display: none !important; }
-            .print-receipt-root { display: block !important; }
+            .print-receipt-root, .print-ticket-root { display: block !important; }
           }
         `}</style>
 
@@ -620,25 +750,34 @@ export default function AdminCounter() {
           )}
 
           {lastCompletedOrder && (
-            <div className="mb-3 rounded-lg border border-[#2d7a3e]/25 bg-[#2d7a3e]/10 p-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-[#1d5e2e]">
-                Order #{lastCompletedOrder.orderNumber} completed. Receipt printed.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPrintingOrder(lastCompletedOrder)}
-                  className="px-3 py-1.5 rounded-md bg-[#0d0f13] text-white text-xs font-semibold"
-                >
-                  Print Again
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLastCompletedOrder(null)}
-                  className="px-3 py-1.5 rounded-md border border-[#0d0f13] text-[#0d0f13] text-xs font-semibold"
-                >
-                  Dismiss
-                </button>
+            <div className="mb-3 rounded-lg border border-[#2d7a3e]/25 bg-[#2d7a3e]/10 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-[#1d5e2e]">
+                    Order #{lastCompletedOrder.orderNumber} completed. Receipt printed.
+                  </p>
+                  <p className="text-xs font-semibold text-[#705d48]">{serviceLabel(lastCompletedOrder.serviceType)}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPrintingOrder(lastCompletedOrder)}
+                    className="px-3 py-1.5 rounded-md bg-[#0d0f13] text-white text-xs font-semibold"
+                  >
+                    Print Receipt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLastCompletedOrder(null)}
+                    className="px-3 py-1.5 rounded-md border border-[#0d0f13] text-[#0d0f13] text-xs font-semibold"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {renderCounterTicketAction(lastCompletedOrder, "kitchen")}
+                {renderCounterTicketAction(lastCompletedOrder, "bar")}
               </div>
             </div>
           )}
@@ -722,6 +861,60 @@ export default function AdminCounter() {
           </div>
         </div>
 
+        {serviceModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
+            <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-[#0d0f13]">Choose Order Type</h2>
+                  <p className="mt-1 text-sm text-[#705d48]">This label will print on the kitchen and bar tickets.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setServiceModalOpen(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#d8d2cb] text-[#0d0f13]"
+                  title="Close modal"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSubmit("dine-in")}
+                  className="min-h-[96px] rounded-lg border-2 border-[#ac312d] bg-[#ac312d] px-4 py-4 text-left text-white"
+                >
+                  <span className="block text-lg font-black uppercase tracking-wide">Dine In</span>
+                  <span className="mt-1 block text-sm font-semibold">Print tickets as DINE IN.</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSubmit("takeout")}
+                  className="min-h-[96px] rounded-lg border-2 border-[#c08643] bg-white px-4 py-4 text-left text-[#0d0f13]"
+                >
+                  <span className="block text-lg font-black uppercase tracking-wide">Takeout / Pickup</span>
+                  <span className="mt-1 block text-sm font-semibold text-[#705d48]">Print tickets as TAKEOUT / PICKUP.</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {printingTicket && activeTicketKind && (
+          <div className="print-ticket-root">
+            <RoundTicket
+              kind={activeTicketKind}
+              orderNumber={printingTicket.orderNumber}
+              orNumber={printingTicket.orNumber ?? ""}
+              items={printingTicket.items}
+              notes={printingTicket.notes || undefined}
+              customerName={printingTicket.customer}
+              cashierName={activeCashier}
+              serviceType={serviceLabel(printingTicket.serviceType)}
+              createdAt={printingTicket.createdAt}
+            />
+          </div>
+        )}
         {printingOrder && (
           <div className="print-receipt-root">
             <CounterReceipt

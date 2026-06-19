@@ -327,6 +327,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [orderItems, setOrderItems] = useState<TableCartItem[]>([]);
   const [notes, setNotes] = useState("");
   const [waiterName, setWaiterName] = useState("");
+  const [showWaiterModal, setShowWaiterModal] = useState(false);
   const [openRounds, setOpenRounds] = useState<RoundWithItems[]>([]);
   const [roundsLoading, setRoundsLoading] = useState(true);
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
@@ -1061,18 +1062,18 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
                 <div className="mt-3">
                   <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Waiter</label>
-                  <select
-                    value={waiterName}
-                    onChange={(event) => setWaiterName(event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-[#d8d2cb] bg-white px-3 py-2 text-sm"
+                  <button
+                    type="button"
+                    onClick={() => setShowWaiterModal(true)}
+                    className={`mt-1 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm font-semibold ${
+                      waiterName
+                        ? "border-[#2d7a3e] bg-[#2d7a3e]/10 text-[#0d0f13]"
+                        : "border-[#d8d2cb] bg-white text-[#705d48]"
+                    }`}
                   >
-                    <option value="">Choose waiter</option>
-                    {WAITER_OPTIONS.map((waiter) => (
-                      <option key={waiter} value={waiter}>
-                        {waiter}
-                      </option>
-                    ))}
-                  </select>
+                    <span>{waiterName || "Choose waiter"}</span>
+                    <ChevronRight size={16} />
+                  </button>
                 </div>
 
                 <div className="mt-3">
@@ -1105,6 +1106,46 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
           </div>
         </div>
 
+        {showWaiterModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
+            <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-[#0d0f13]">Choose Waiter</h2>
+                  <p className="mt-1 text-sm text-[#705d48]">Select the waiter before submitting this round.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowWaiterModal(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#d8d2cb] text-[#0d0f13]"
+                  title="Close modal"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {WAITER_OPTIONS.map((waiter) => (
+                  <button
+                    key={waiter}
+                    type="button"
+                    onClick={() => {
+                      setWaiterName(waiter);
+                      setError(null);
+                      setShowWaiterModal(false);
+                    }}
+                    className={`min-h-[72px] rounded-lg border px-3 py-3 text-center text-sm font-bold ${
+                      waiterName === waiter
+                        ? "border-[#ac312d] bg-[#ac312d] text-white"
+                        : "border-[#d8d2cb] bg-[#f6f2ed] text-[#0d0f13]"
+                    }`}
+                  >
+                    {waiter}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         {showCloseModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
             <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
@@ -1264,6 +1305,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               notes={printingTicket.notes || undefined}
               waiterName={printingTicket.waiterName}
               cashierName={cashierName}
+              serviceType="DINE IN"
               createdAt={printingTicket.createdAt}
             />
           </div>
@@ -1281,6 +1323,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               notes={printingTicket.notes || undefined}
               waiterName={printingTicket.waiterName}
               cashierName={cashierName}
+              serviceType="DINE IN"
               createdAt={printingTicket.createdAt}
             />
           </div>

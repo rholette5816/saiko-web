@@ -1,13 +1,15 @@
 interface RoundTicketProps {
   kind: "kitchen" | "bar";
-  tableNumber: string;
-  capacity: string;
+  tableNumber?: string;
+  capacity?: string;
   orderNumber: string;
   orNumber: string;
   items: { name: string; quantity: number }[];
   notes?: string;
   waiterName?: string;
   cashierName?: string;
+  customerName?: string;
+  serviceType?: string;
   createdAt: Date;
 }
 
@@ -38,7 +40,10 @@ function formatTime(value: Date) {
 export function RoundTicket(props: RoundTicketProps) {
   const ticketLabel = props.kind === "kitchen" ? "KITCHEN" : "BAR";
   const cashierName = props.cashierName || "admin";
-  const waiterName = props.waiterName ? props.waiterName.toUpperCase() : "N/A";
+  const waiterName = props.waiterName ? props.waiterName.toUpperCase() : null;
+  const customerName = props.customerName?.trim();
+  const tableNumber = props.tableNumber?.trim();
+  const serviceType = (props.serviceType || "DINE IN").toUpperCase();
 
   return (
     <div className="round-ticket">
@@ -98,12 +103,13 @@ export function RoundTicket(props: RoundTicketProps) {
       `}</style>
 
       <div className="center ticket-kind">
-        {ticketLabel} TABLE {props.tableNumber}
+        {tableNumber ? `${ticketLabel} TABLE ${tableNumber}` : ticketLabel}
       </div>
       <div>Order No.:{props.orderNumber}</div>
       <div>Cashier:{cashierName}</div>
-      <div>Waiter:{waiterName}</div>
-      <div className="center dine">DINE IN</div>
+      {customerName && <div>Customer:{customerName}</div>}
+      {waiterName && <div>Waiter:{waiterName}</div>}
+      <div className="center dine">{serviceType}</div>
 
       <div className="divider">{divider("=")}</div>
       <div className="item-head">
