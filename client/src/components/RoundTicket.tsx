@@ -46,46 +46,46 @@ export function RoundTicket(props: RoundTicketProps) {
         .round-ticket {
           font-family: Consolas, "Courier New", monospace;
           box-sizing: border-box;
-          width: 72mm;
-          max-width: 72mm;
+          width: 80mm;
+          max-width: 80mm;
           margin: 0 auto;
-          padding: 0 3mm 2mm;
+          padding: 2mm 3mm 3mm;
           color: #000000;
           background: white;
-          line-height: 1.08;
-          font-size: 12px;
+          line-height: 1.15;
+          font-size: 14px;
           font-weight: 700;
           -webkit-font-smoothing: none;
           text-rendering: geometricPrecision;
         }
         .round-ticket .center { text-align: center; }
-        .round-ticket .ticket-kind { font-size: 17px; font-weight: 900; line-height: 1; }
-        .round-ticket .dine { font-size: 19px; font-weight: 900; line-height: 1; margin: 2px 0; }
+        .round-ticket .ticket-kind { font-size: 20px; font-weight: 900; line-height: 1.05; }
+        .round-ticket .dine { font-size: 22px; font-weight: 900; line-height: 1.05; margin: 3px 0; }
         .round-ticket .bold { font-weight: 900; }
-        .round-ticket .divider { margin: 3px 0; overflow: hidden; white-space: nowrap; }
+        .round-ticket .divider { margin: 4px 0; overflow: hidden; white-space: nowrap; font-size: 13px; }
         .round-ticket .item-head {
           display: grid;
           grid-template-columns: 36px minmax(0, 1fr);
           gap: 6px;
-          font-size: 13px;
+          font-size: 14px;
           font-weight: 900;
         }
         .round-ticket .item-row {
           display: grid;
-          grid-template-columns: 36px minmax(0, 1fr);
+          grid-template-columns: 40px minmax(0, 1fr);
           gap: 6px;
-          margin: 4px 0;
-          font-size: 17px;
+          margin: 5px 0;
+          font-size: 20px;
           font-weight: 900;
-          line-height: 1.02;
+          line-height: 1.1;
         }
         .round-ticket .qty { text-align: right; }
         .round-ticket .desc { min-width: 0; overflow-wrap: anywhere; }
-        .round-ticket .notes { margin-top: 5px; font-size: 13px; font-weight: 900; }
-        .round-ticket .footer-time { margin-top: 3px; font-size: 12px; }
+        .round-ticket .notes { margin-top: 6px; font-size: 15px; font-weight: 900; }
+        .round-ticket .footer-time { margin-top: 4px; font-size: 13px; }
         @media print {
-          @page { size: 3in 95mm; margin: 0; }
-          html, body, #root { margin: 0 !important; padding: 0 !important; width: 3in !important; min-height: 0 !important; background: white !important; }
+          @page { size: 80mm auto; margin: 0; }
+          html, body, #root { margin: 0 !important; padding: 0 !important; background: white !important; height: auto !important; min-height: 0 !important; }
           body * { visibility: hidden !important; }
           .round-ticket, .round-ticket * { visibility: visible !important; }
           .round-ticket {
@@ -94,9 +94,9 @@ export function RoundTicket(props: RoundTicketProps) {
             left: 0 !important;
             box-shadow: none !important;
             margin: 0 !important;
-            width: 72mm !important;
-            max-width: 72mm !important;
-            padding-top: 0 !important;
+            width: 80mm !important;
+            max-width: 80mm !important;
+            page-break-after: avoid !important;
           }
         }
       `}</style>

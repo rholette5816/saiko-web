@@ -115,38 +115,39 @@ export function TableBill(props: TableBillProps) {
         .table-bill {
           font-family: Consolas, "Courier New", monospace;
           box-sizing: border-box;
-          width: 72mm;
-          max-width: 72mm;
+          width: 80mm;
+          max-width: 80mm;
           margin: 0 auto;
-          padding: 0 3mm 8mm;
+          padding: 2mm 3mm 6mm;
           color: #000000;
           background: white;
-          line-height: 1.16;
-          font-size: 12px;
+          line-height: 1.2;
+          font-size: 14px;
           font-weight: 700;
           -webkit-font-smoothing: none;
           text-rendering: geometricPrecision;
         }
         .table-bill .center { text-align: center; }
-        .table-bill .heading { font-weight: 900; font-size: 13px; line-height: 1.12; }
-        .table-bill .row { display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 4px; }
+        .table-bill .heading { font-weight: 900; font-size: 15px; line-height: 1.15; }
+        .table-bill .row { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 4px; }
         .table-bill .row .value { text-align: right; }
         .table-bill .bold { font-weight: 900; }
         .table-bill .muted { color: #000000; }
-        .table-bill .divider { margin: 4px 0; color: #000000; overflow: hidden; white-space: nowrap; }
-        .table-bill .total { font-size: 14px; font-weight: 900; }
+        .table-bill .divider { margin: 5px 0; color: #000000; overflow: hidden; white-space: nowrap; font-size: 13px; }
+        .table-bill .total { font-size: 17px; font-weight: 900; }
         .table-bill .item-name { min-width: 0; overflow-wrap: anywhere; }
         .table-bill .item-row {
           display: grid;
-          grid-template-columns: 24px minmax(0, 1fr) 72px;
+          grid-template-columns: 28px minmax(0, 1fr) 80px;
           gap: 4px;
           align-items: start;
+          font-size: 14px;
         }
         .table-bill .item-qty { text-align: right; }
         .table-bill .item-amount { text-align: right; }
         @media print {
-          @page { size: 3in auto; margin: 0; }
-          html, body, #root { margin: 0 !important; padding: 0 !important; width: 3in !important; background: white !important; }
+          @page { size: 80mm auto; margin: 0; }
+          html, body, #root { margin: 0 !important; padding: 0 !important; background: white !important; height: auto !important; min-height: 0 !important; }
           body * { visibility: hidden !important; }
           .table-bill, .table-bill * { visibility: visible !important; }
           .table-bill {
@@ -155,9 +156,9 @@ export function TableBill(props: TableBillProps) {
             left: 0 !important;
             box-shadow: none !important;
             margin: 0 !important;
-            width: 72mm !important;
-            max-width: 72mm !important;
-            padding-top: 0 !important;
+            width: 80mm !important;
+            max-width: 80mm !important;
+            page-break-after: avoid !important;
           }
         }
       `}</style>
