@@ -70,12 +70,12 @@ function Router() {
           </AdminGuard>
         </Route>
         <Route path={"/admin/orders"}>
-          <AdminGuard>
+          <AdminGuard adminOnly>
             <AdminOrders />
           </AdminGuard>
         </Route>
         <Route path={"/admin/counter"}>
-          <AdminGuard>
+          <AdminGuard adminOnly>
             <AdminCounter />
           </AdminGuard>
         </Route>
@@ -118,14 +118,14 @@ function Router() {
         </Route>
         <Route path={"/admin/orders/:id/print"}>
           {(params) => (
-            <AdminGuard>
+            <AdminGuard adminOnly>
               <AdminPrintSlip id={params.id} />
             </AdminGuard>
           )}
         </Route>
         <Route path={"/admin/orders/:id"}>
           {(params) => (
-            <AdminGuard>
+            <AdminGuard adminOnly>
               <AdminOrderDetail id={params.id} />
             </AdminGuard>
           )}

@@ -502,15 +502,19 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setPrintingByTicket((current) => ({ ...current, [key]: true }));
     setPrintingTicket(payload);
     setActivePrintKind(kind);
+    // Give React time to commit the print container before opening the dialog.
     window.setTimeout(() => {
       window.print();
-      void markTicketPrinted(payload.orderId, kind).finally(() => {
+      // Defer cleanup + DB write so the print preview keeps the ticket DOM intact
+      // even on browsers where window.print() returns immediately.
+      window.setTimeout(() => {
         document.title = previousTitle;
         setActivePrintKind(null);
         setPrintingTicket(null);
         setPrintingByTicket((current) => ({ ...current, [key]: false }));
-      });
-    }, 80);
+        void markTicketPrinted(payload.orderId, kind);
+      }, 600);
+    }, 300);
   }
 
   useEffect(() => {

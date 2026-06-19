@@ -23,7 +23,7 @@ function playAlertTone() {
   oscillator.stop(context.currentTime + 0.18);
 }
 
-const STAFF_NAV_LABELS = new Set(["Orders", "Counter", "Tables", "Help"]);
+const STAFF_NAV_LABELS = new Set(["Tables"]);
 
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
@@ -176,20 +176,22 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                 </div>
               )}
             </div>
-            <label className="flex items-center gap-1 text-xs font-semibold text-[#705d48]">
-              <span className="hidden md:inline">Cashier</span>
-              <select
-                value={activeCashier}
-                onChange={(event) => setActiveCashier(event.target.value)}
-                className="h-9 max-w-[92px] rounded-md border border-[#d8d2cb] bg-white px-2 text-xs font-semibold text-[#0d0f13] md:max-w-none"
-              >
-                {cashierOptions.map((cashier) => (
-                  <option key={cashier} value={cashier}>
-                    {cashier}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {role !== "staff" && (
+              <label className="flex items-center gap-1 text-xs font-semibold text-[#705d48]">
+                <span className="hidden md:inline">Cashier</span>
+                <select
+                  value={activeCashier}
+                  onChange={(event) => setActiveCashier(event.target.value)}
+                  className="h-9 max-w-[92px] rounded-md border border-[#d8d2cb] bg-white px-2 text-xs font-semibold text-[#0d0f13] md:max-w-none"
+                >
+                  {cashierOptions.map((cashier) => (
+                    <option key={cashier} value={cashier}>
+                      {cashier}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <span className="hidden lg:inline text-xs text-[#705d48]">{session?.user?.email ?? "admin"}</span>
             <button
               type="button"
