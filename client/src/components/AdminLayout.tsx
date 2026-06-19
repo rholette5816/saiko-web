@@ -110,7 +110,13 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#ebe9e6] text-[#0d0f13]">
-      <header className="border-b border-[#d8d2cb] bg-white">
+      <style>{`
+        @media print {
+          .admin-shell-header, .admin-shell-aside { display: none !important; }
+          .admin-shell-main-wrap { display: block !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
+        }
+      `}</style>
+      <header className="admin-shell-header border-b border-[#d8d2cb] bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 justify-between">
           <Link href={role === "staff" ? "/admin/tables" : "/admin"} className="inline-flex items-center gap-3">
             <img src={logo} alt="Saiko" className="h-9 w-auto" />
@@ -206,8 +212,8 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto md:grid md:grid-cols-[220px_1fr] md:gap-6 px-4 sm:px-6 py-4 md:py-6">
-        <aside className="mb-4 md:mb-0">
+      <div className="admin-shell-main-wrap max-w-7xl mx-auto md:grid md:grid-cols-[220px_1fr] md:gap-6 px-4 sm:px-6 py-4 md:py-6">
+        <aside className="admin-shell-aside mb-4 md:mb-0">
           <nav className="bg-[#0d0f13] rounded-lg p-2 flex md:flex-col gap-2 overflow-x-auto">
             {navItems.map((item) => {
               const isActive = item.active(location);

@@ -86,12 +86,8 @@ export function RoundTicket(props: RoundTicketProps) {
         @media print {
           @page { size: 80mm auto; margin: 0; }
           html, body, #root { margin: 0 !important; padding: 0 !important; background: white !important; height: auto !important; min-height: 0 !important; }
-          body * { visibility: hidden !important; }
-          .round-ticket, .round-ticket * { visibility: visible !important; }
           .round-ticket {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
+            position: static !important;
             box-shadow: none !important;
             margin: 0 !important;
             width: 80mm !important;
