@@ -1,7 +1,7 @@
 import { AdminLayout } from "@/components/AdminLayout";
 import { CounterReceipt } from "@/components/CounterReceipt";
-import { useAuth } from "@/lib/auth";
 import { useBusinessSettings } from "@/lib/businessSettings";
+import { useActiveCashier } from "@/lib/cashier";
 import { menuData } from "@/lib/menuData";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { Minus, Plus, Search, Trash2 } from "lucide-react";
@@ -98,7 +98,7 @@ function round2(value: number): number {
 }
 
 export default function AdminCounter() {
-  const { session } = useAuth();
+  const { activeCashier } = useActiveCashier();
   const { settings, loading: settingsLoading } = useBusinessSettings();
   const resolvedSettings = settings ?? DEFAULT_SETTINGS;
 
@@ -745,7 +745,7 @@ export default function AdminCounter() {
               discountIdNumber={printingOrder.discountIdNumber}
               discountHolderName={printingOrder.discountHolderName}
               settings={resolvedSettings}
-              cashier={session?.user?.email ?? "admin"}
+              cashier={activeCashier}
             />
           </div>
         )}

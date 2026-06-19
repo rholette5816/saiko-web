@@ -2,7 +2,7 @@ import { AdminLayout } from "@/components/AdminLayout";
 import { RoundTicket } from "@/components/RoundTicket";
 import { TableBill } from "@/components/TableBill";
 import { useBusinessSettings } from "@/lib/businessSettings";
-import { useAuth } from "@/lib/auth";
+import { useActiveCashier } from "@/lib/cashier";
 import { menuData } from "@/lib/menuData";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { getTable, type TableDef } from "@/lib/tables";
@@ -312,10 +312,10 @@ function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSett
 export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [, navigate] = useLocation();
   const table = useMemo(() => getTable(tableId), [tableId]);
-  const { session } = useAuth();
+  const { activeCashier } = useActiveCashier();
   const { settings, loading: settingsLoading } = useBusinessSettings();
   const resolvedSettings = settings ?? DEFAULT_SETTINGS;
-  const cashierName = session?.user?.email?.split("@")[0] ?? "admin";
+  const cashierName = activeCashier;
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [search, setSearch] = useState("");

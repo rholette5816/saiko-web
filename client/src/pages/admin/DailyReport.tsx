@@ -1,6 +1,6 @@
 import { AdminLayout } from "@/components/AdminLayout";
-import { useAuth } from "@/lib/auth";
 import { useBusinessSettings } from "@/lib/businessSettings";
+import { useActiveCashier } from "@/lib/cashier";
 import { exportOrdersToCsv } from "@/lib/csvExport";
 import { getCustomRange } from "@/lib/dateRanges";
 import { type OrderItemRow, type OrderRow, supabase } from "@/lib/supabase";
@@ -54,7 +54,7 @@ function toNumber(value: unknown): number {
 }
 
 export default function AdminDailyReport() {
-  const { session } = useAuth();
+  const { activeCashier } = useActiveCashier();
   const { settings } = useBusinessSettings();
 
   const [date, setDate] = useState(() => formatYmdInManila(new Date()));
@@ -329,7 +329,7 @@ export default function AdminDailyReport() {
                 Generated:{" "}
                 {generatedAt?.toLocaleString("en-PH", { timeZone: "Asia/Manila" }) ?? "N/A"}
               </p>
-              <p className="text-sm text-[#705d48]">Cashier: {session?.user?.email ?? "admin"}</p>
+              <p className="text-sm text-[#705d48]">Cashier: {activeCashier}</p>
             </header>
 
             <section className="mt-5 space-y-2">
