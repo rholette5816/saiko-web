@@ -1,6 +1,7 @@
 import { AdminLayout } from "@/components/AdminLayout";
 import { exportOrdersToCsv } from "@/lib/csvExport";
 import { type DateRange, type DateRangeKey, getCustomRange, getRange } from "@/lib/dateRanges";
+import { getRequiredTicketKinds, getTicketStatus, type TicketKind } from "@/lib/orderTickets";
 import { supabase, type OrderItemRow, type OrderRow } from "@/lib/supabase";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -43,6 +44,18 @@ function formatDate(value: string): string {
 
 function currencyPhp(value: number): string {
   return `\u20B1${value.toLocaleString("en-PH")}`;
+}
+
+function formatTicketTime(value: string): string {
+  return new Date(value).toLocaleTimeString("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function ticketKindLabel(kind: TicketKind): string {
+  return kind === "kitchen" ? "Kitchen" : "Bar";
 }
 
 function currentDateStamp(): string {
@@ -109,9 +122,11 @@ export default function AdminOrders() {
   useEffect(() => {
     const onNewOrder = () => fetchOrders(true);
     window.addEventListener("saiko:new-order", onNewOrder);
+    window.addEventListener("saiko:ticket-updated", onNewOrder);
     const interval = window.setInterval(() => fetchOrders(true), 15000);
     return () => {
       window.removeEventListener("saiko:new-order", onNewOrder);
+      window.removeEventListener("saiko:ticket-updated", onNewOrder);
       window.clearInterval(interval);
     };
   }, [fetchOrders]);
@@ -174,6 +189,33 @@ export default function AdminOrders() {
     setSelectedIds(new Set());
   }
 
+
+  function renderTicketStatus(order: OrderWithItems) {
+    const requiredKinds = getRequiredTicketKinds(order.order_items ?? []);
+    if (!requiredKinds.length) {
+      return <span className="text-xs font-semibold text-[#705d48]">No routed items</span>;
+    }
+
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {requiredKinds.map((kind) => {
+          const status = getTicketStatus(order, kind);
+          const done = !!status.printedAt;
+          return (
+            <span
+              key={`${order.id}-${kind}`}
+              className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-bold ${
+                done ? "bg-[#2d7a3e]/10 text-[#2d7a3e]" : "bg-[#ac312d]/10 text-[#ac312d]"
+              }`}
+              title={status.printedAt ? `${ticketKindLabel(kind)} submitted ${formatTicketTime(status.printedAt)}` : `${ticketKindLabel(kind)} pending`}
+            >
+              {ticketKindLabel(kind)}: {done ? "Done" : "Pending"}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
   async function applyBulkStatus(nextStatus: BulkStatusAction) {
     if (!selectedCount || bulkRunning) return;
 
@@ -388,6 +430,7 @@ export default function AdminOrders() {
                       <th className="py-2">Pickup</th>
                       <th className="py-2">Total</th>
                       <th className="py-2">Status</th>
+                      <th className="py-2">Tickets</th>
                       <th className="py-2">Created</th>
                     </tr>
                   </thead>
@@ -416,6 +459,7 @@ export default function AdminOrders() {
                             {order.status}
                           </span>
                         </td>
+                        <td className="py-2">{renderTicketStatus(order)}</td>
                         <td className="py-2 text-xs text-[#705d48]">{formatDate(order.created_at)}</td>
                       </tr>
                     ))}
@@ -453,6 +497,7 @@ export default function AdminOrders() {
                     <p className="text-sm text-[#0d0f13] mt-1">{order.customer_name}</p>
                     <p className="text-xs text-[#705d48]">{order.customer_phone}</p>
                     <p className="text-xs text-[#705d48] mt-1">Pickup: {order.pickup_label}</p>
+                    <div className="mt-2">{renderTicketStatus(order)}</div>
                     <p className="text-sm font-semibold text-[#0d0f13] mt-1">{currencyPhp(Number(order.total_amount))}</p>
                     <p className="text-xs text-[#705d48] mt-1">{formatDate(order.created_at)}</p>
                   </div>

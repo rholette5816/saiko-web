@@ -4,6 +4,7 @@ import { RoundTicket } from "@/components/RoundTicket";
 import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
 import { menuData } from "@/lib/menuData";
+import { composeOrderTicketNotes, getTicketStatus, parseOrderTicketNotes } from "@/lib/orderTickets";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -40,6 +41,7 @@ interface CounterOrderItem {
 }
 
 interface CompletedOrder {
+  orderId: string;
   orderNumber: string;
   orNumber: string | null;
   items: CounterOrderItem[];
@@ -50,6 +52,7 @@ interface CompletedOrder {
   change: number;
   customer: string;
   notes: string;
+  ticketNotes: string | null;
   createdAt: Date;
   vatableSales: number;
   vatAmount: number;
@@ -261,23 +264,45 @@ export default function AdminCounter() {
       .filter((item) => item.quantity > 0);
   }
 
-  function markCounterTicketPrinted(orderNumber: string, kind: TicketKind) {
+  async function markCounterTicketPrinted(order: CompletedOrder, kind: TicketKind) {
     const printedAt = new Date();
+    const nextLocalOrder =
+      kind === "kitchen"
+        ? {
+            ...order,
+            kitchenTicketPrintedAt: printedAt,
+            kitchenTicketPrintCount: order.kitchenTicketPrintCount + 1,
+          }
+        : {
+            ...order,
+            barTicketPrintedAt: printedAt,
+            barTicketPrintCount: order.barTicketPrintCount + 1,
+          };
+
     setLastCompletedOrder((current) => {
-      if (!current || current.orderNumber !== orderNumber) return current;
-      if (kind === "kitchen") {
-        return {
-          ...current,
-          kitchenTicketPrintedAt: printedAt,
-          kitchenTicketPrintCount: current.kitchenTicketPrintCount + 1,
-        };
-      }
-      return {
-        ...current,
-        barTicketPrintedAt: printedAt,
-        barTicketPrintCount: current.barTicketPrintCount + 1,
-      };
+      if (!current || current.orderNumber !== order.orderNumber) return current;
+      return nextLocalOrder;
     });
+
+    if (!order.orderId) return;
+
+    const metadata = parseOrderTicketNotes(order.ticketNotes ?? order.notes);
+    metadata.printStatus[kind] = {
+      printedAt: printedAt.toISOString(),
+      count: getTicketStatus({ notes: order.ticketNotes }, kind).count + 1,
+    };
+    const nextNotes = composeOrderTicketNotes(order.notes, metadata.printStatus);
+    const { error: updateError } = await supabase.from("orders").update({ notes: nextNotes }).eq("id", order.orderId);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setLastCompletedOrder((current) => {
+      if (!current || current.orderNumber !== order.orderNumber) return current;
+      return { ...current, ticketNotes: nextNotes };
+    });
+    window.dispatchEvent(new CustomEvent("saiko:ticket-updated", { detail: { orderId: order.orderId, kind } }));
   }
 
   function printCounterTicket(order: CompletedOrder, kind: TicketKind) {
@@ -306,7 +331,7 @@ export default function AdminCounter() {
         setPrintingTicket(null);
         setActiveTicketKind(null);
         setPrintingByTicket((current) => ({ ...current, [kind]: false }));
-        markCounterTicketPrinted(order.orderNumber, kind);
+        void markCounterTicketPrinted(order, kind);
       }, 600);
     }, 300);
   }
@@ -423,6 +448,7 @@ export default function AdminCounter() {
     }
 
     const completed: CompletedOrder = {
+      orderId: row?.order_id ?? "",
       orderNumber,
       orNumber: row?.or_number ?? null,
       items: orderItems,
@@ -433,6 +459,7 @@ export default function AdminCounter() {
       change: Math.max(0, round2(received - pricing.total)),
       customer: customerName.trim() || "Walk-in",
       notes: notes.trim(),
+      ticketNotes: notes.trim() || null,
       createdAt: new Date(),
       vatableSales: Number(row?.vatable_sales ?? pricing.vatableSales),
       vatAmount: Number(row?.vat_amount ?? pricing.vatAmount),

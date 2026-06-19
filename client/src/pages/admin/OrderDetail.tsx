@@ -1,4 +1,5 @@
 import { AdminLayout } from "@/components/AdminLayout";
+import { cleanOrderNotes } from "@/lib/orderTickets";
 import { supabase } from "@/lib/supabase";
 import { Phone, Smartphone, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -57,7 +58,7 @@ function buildReadyMessage(order: OrderWithItems): string {
     `Pickup: ${order.pickup_label}`,
     lines.length ? `Items:\n${lines.join("\n")}` : "",
     `Total: ${currencyPhp(Number(order.total_amount))}`,
-    order.notes ? `Notes: ${order.notes}` : "",
+    cleanOrderNotes(order.notes) ? `Notes: ${cleanOrderNotes(order.notes)}` : "",
     "Thank you! - Saiko Ramen & Sushi",
   ]
     .filter(Boolean)
@@ -232,7 +233,7 @@ export default function AdminOrderDetail({ id }: { id: string }) {
                   Pre-order
                 </span>
               )}
-              {order.notes && <p className="text-sm text-[#705d48] mt-2">Notes: {order.notes}</p>}
+              {cleanOrderNotes(order.notes) && <p className="text-sm text-[#705d48] mt-2">Notes: {cleanOrderNotes(order.notes)}</p>}
             </div>
 
             <div className="bg-white rounded-lg p-4">

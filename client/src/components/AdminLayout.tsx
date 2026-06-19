@@ -1,8 +1,18 @@
+import { RoundTicket } from "@/components/RoundTicket";
 import { signOut, useAuth } from "@/lib/auth";
 import { useActiveCashier } from "@/lib/cashier";
 import { type LiveStatus, type NewOrderEvent, subscribeToOrderInserts } from "@/lib/adminRealtime";
+import {
+  composeOrderTicketNotes,
+  getRequiredTicketKinds,
+  getTicketItems,
+  getTicketStatus,
+  parseOrderTicketNotes,
+  type TicketKind,
+} from "@/lib/orderTickets";
+import { supabase } from "@/lib/supabase";
 import logo from "@/assets/logo.png";
-import { Bell, BookOpen, Calculator, FileText, LayoutDashboard, LayoutGrid, ListOrdered, LogOut, Package, Settings, Tag, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
+import { Bell, BookOpen, Calculator, FileText, LayoutDashboard, LayoutGrid, ListOrdered, LogOut, Package, Settings, Tag, Volume2, VolumeX, Wifi, WifiOff, X } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
@@ -25,6 +35,51 @@ function playAlertTone() {
 
 const STAFF_NAV_LABELS = new Set(["Tables"]);
 
+interface OnlineOrderItem {
+  id: string;
+  item_id: string | null;
+  item_name: string;
+  quantity: number | string;
+}
+
+interface OnlineOrderForModal {
+  id: string;
+  order_number: string;
+  customer_name: string;
+  customer_phone?: string | null;
+  pickup_label: string;
+  notes: string | null;
+  channel?: string | null;
+  total_amount: number | string;
+  created_at: string;
+  kitchen_ticket_printed_at?: string | null;
+  kitchen_ticket_print_count?: number | string | null;
+  bar_ticket_printed_at?: string | null;
+  bar_ticket_print_count?: number | string | null;
+  order_items: OnlineOrderItem[];
+}
+
+interface OnlineTicketPayload {
+  order: OnlineOrderForModal;
+  kind: TicketKind;
+  items: { name: string; quantity: number }[];
+}
+
+function formatTicketTime(value: string): string {
+  return new Date(value).toLocaleTimeString("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function currencyPhp(value: number): string {
+  return `PHP ${Number(value || 0).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
   const { session, role } = useAuth();
@@ -34,6 +89,11 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
   const [unseenOrders, setUnseenOrders] = useState<NewOrderEvent[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [onlineOrderQueue, setOnlineOrderQueue] = useState<OnlineOrderForModal[]>([]);
+  const [printingOnlineTicket, setPrintingOnlineTicket] = useState<OnlineTicketPayload | null>(null);
+  const [printingTicketKey, setPrintingTicketKey] = useState<string | null>(null);
+  const [onlineTicketError, setOnlineTicketError] = useState<string | null>(null);
+  const onlineOrderModal = onlineOrderQueue[0] ?? null;
 
   const navItems = useMemo(() => {
     const all = [
@@ -82,6 +142,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           }
         }
         window.dispatchEvent(new CustomEvent("saiko:new-order", { detail: order }));
+        void loadOnlineOrderForModal(order);
       },
       (status) => setLiveStatus(status),
     );
@@ -105,15 +166,146 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   function openNotifications() {
     setShowNotifications((prev) => !prev);
   }
+  async function loadOnlineOrderForModal(order: NewOrderEvent) {
+    if (order.channel && order.channel !== "web") return;
+
+    const { data, error } = await supabase
+      .from("orders")
+      .select("*, order_items(*)")
+      .eq("id", order.id)
+      .maybeSingle();
+
+    if (error || !data) return;
+
+    const fullOrder = data as OnlineOrderForModal;
+    if (fullOrder.channel !== "web") return;
+    if (getRequiredTicketKinds(fullOrder.order_items).length === 0) return;
+
+    setOnlineOrderQueue((current) => {
+      if (current.some((item) => item.id === fullOrder.id)) return current;
+      return [...current, fullOrder].slice(0, 8);
+    });
+    setOnlineTicketError(null);
+  }
+
+  function closeOnlineOrderModal() {
+    setOnlineOrderQueue((current) => current.slice(1));
+    setOnlineTicketError(null);
+  }
+
+  function updateQueuedOrder(orderId: string, nextOrder: Partial<OnlineOrderForModal>) {
+    setOnlineOrderQueue((current) =>
+      current.map((item) => (item.id === orderId ? { ...item, ...nextOrder } : item)),
+    );
+  }
+
+  async function markOnlineTicketSubmitted(order: OnlineOrderForModal, kind: TicketKind) {
+    const printedAt = new Date().toISOString();
+    const metadata = parseOrderTicketNotes(order.notes);
+    metadata.printStatus[kind] = {
+      printedAt,
+      count: getTicketStatus(order, kind).count + 1,
+    };
+
+    const nextNotes = composeOrderTicketNotes(order.notes, metadata.printStatus);
+    const { error } = await supabase.from("orders").update({ notes: nextNotes }).eq("id", order.id);
+    if (error) {
+      setOnlineTicketError(error.message);
+      return;
+    }
+
+    updateQueuedOrder(order.id, { notes: nextNotes });
+    window.dispatchEvent(new CustomEvent("saiko:ticket-updated", { detail: { orderId: order.id, kind } }));
+  }
+
+  function printOnlineTicket(order: OnlineOrderForModal, kind: TicketKind) {
+    const routedItems = getTicketItems(order.order_items, kind).map((item) => ({
+      name: item.item_name,
+      quantity: Number(item.quantity ?? 0),
+    }));
+    if (!routedItems.length) return;
+
+    const key = `${order.id}-${kind}`;
+    const previousTitle = document.title;
+    document.title = kind === "kitchen" ? "KITCHEN TICKET" : "BAR TICKET";
+    setPrintingTicketKey(key);
+    setPrintingOnlineTicket({ order, kind, items: routedItems });
+
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(() => {
+        document.title = previousTitle;
+        setPrintingOnlineTicket(null);
+        setPrintingTicketKey(null);
+        void markOnlineTicketSubmitted(order, kind);
+      }, 600);
+    }, 300);
+  }
+
+  function onlineOrderTicketsComplete(order: OnlineOrderForModal): boolean {
+    return getRequiredTicketKinds(order.order_items).every((kind) => !!getTicketStatus(order, kind).printedAt);
+  }
+
+  function renderOnlineTicketAction(order: OnlineOrderForModal, kind: TicketKind) {
+    const routedItems = getTicketItems(order.order_items, kind);
+    if (!routedItems.length) return null;
+
+    const status = getTicketStatus(order, kind);
+    const label = kind === "kitchen" ? "Kitchen" : "Bar";
+    const key = `${order.id}-${kind}`;
+    const isPrinting = printingTicketKey === key;
+    const statusText = status.printedAt
+      ? `Done ${formatTicketTime(status.printedAt)}${status.count > 1 ? ` (${status.count}x)` : ""}`
+      : "Pending";
+
+    return (
+      <div className="rounded-lg border border-[#d8d2cb] bg-[#faf8f6] p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-[#0d0f13]">{label}</p>
+            <p className={`mt-0.5 text-xs font-bold ${status.printedAt ? "text-[#2d7a3e]" : "text-[#ac312d]"}`}>
+              {statusText}
+            </p>
+            <p className="mt-1 text-xs text-[#705d48]">{routedItems.length} line item{routedItems.length === 1 ? "" : "s"}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => printOnlineTicket(order, kind)}
+            disabled={isPrinting}
+            className={`min-w-[132px] rounded-md px-3 py-2 text-xs font-bold uppercase tracking-wide text-white disabled:opacity-60 ${
+              kind === "kitchen" ? "bg-[#ac312d]" : "bg-[#c08643]"
+            }`}
+          >
+            {isPrinting ? "Printing" : status.printedAt ? `Reprint ${label}` : `Submit ${label}`}
+          </button>
+        </div>
+        <div className="mt-2 space-y-1 text-xs text-[#0d0f13]">
+          {routedItems.slice(0, 4).map((item) => (
+            <div key={`${kind}-${item.id}`} className="flex justify-between gap-2">
+              <span>{item.item_name}</span>
+              <span className="font-bold">x{Number(item.quantity ?? 0)}</span>
+            </div>
+          ))}
+          {routedItems.length > 4 && <p className="text-[#705d48]">+{routedItems.length - 4} more</p>}
+        </div>
+      </div>
+    );
+  }
 
   const liveText = liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline";
 
   return (
-    <div className="min-h-screen bg-[#ebe9e6] text-[#0d0f13]">
+    <div className={`min-h-screen bg-[#ebe9e6] text-[#0d0f13] ${printingOnlineTicket ? "admin-online-ticket-printing" : ""}`}>
       <style>{`
+        .admin-online-ticket-print { display: none; }
         @media print {
           .admin-shell-header, .admin-shell-aside { display: none !important; }
           .admin-shell-main-wrap { display: block !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
+          .admin-online-ticket-printing .admin-shell-main-wrap,
+          .admin-online-ticket-printing .admin-shell-header,
+          .admin-online-ticket-printing .admin-shell-aside,
+          .admin-online-ticket-printing .admin-online-order-modal { display: none !important; }
+          .admin-online-ticket-printing .admin-online-ticket-print { display: block !important; }
         }
       `}</style>
       <header className="admin-shell-header border-b border-[#d8d2cb] bg-white">
@@ -245,6 +437,110 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
         <main className="min-w-0">{children}</main>
       </div>
+      {onlineOrderModal && (
+        <div className="admin-online-order-modal fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/65 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-[#ebe9e6] px-4 py-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-[#ac312d]">New Online Order</p>
+                <h2 className="text-xl font-black text-[#0d0f13]">{onlineOrderModal.order_number}</h2>
+                <p className="mt-1 text-sm text-[#705d48]">
+                  {onlineOrderModal.customer_name} | {onlineOrderModal.pickup_label} | {currencyPhp(Number(onlineOrderModal.total_amount))}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeOnlineOrderModal}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#d8d2cb] text-[#0d0f13]"
+                title="Close popup"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="max-h-[72vh] overflow-y-auto px-4 py-4">
+              <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+                <div className="rounded-lg border border-[#ebe9e6] p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#705d48]">Items</p>
+                  <div className="mt-2 space-y-1.5 text-sm text-[#0d0f13]">
+                    {onlineOrderModal.order_items.map((item) => (
+                      <div key={item.id} className="flex justify-between gap-3">
+                        <span>{item.item_name}</span>
+                        <span className="font-bold">x{Number(item.quantity ?? 0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-[#ebe9e6] p-3 text-sm">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#705d48]">Ticket Memory</p>
+                  <p className={`mt-2 font-bold ${onlineOrderTicketsComplete(onlineOrderModal) ? "text-[#2d7a3e]" : "text-[#ac312d]"}`}>
+                    {onlineOrderTicketsComplete(onlineOrderModal) ? "All submitted" : "Needs submission"}
+                  </p>
+                  {onlineOrderQueue.length > 1 && (
+                    <p className="mt-1 text-xs text-[#705d48]">{onlineOrderQueue.length - 1} more waiting</p>
+                  )}
+                  <Link
+                    href={`/admin/orders/${onlineOrderModal.id}`}
+                    onClick={() => {
+                      setUnseenOrders((prev) => prev.filter((item) => item.id !== onlineOrderModal.id));
+                      closeOnlineOrderModal();
+                    }}
+                    className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#0d0f13] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#0d0f13]"
+                  >
+                    View Order
+                  </Link>
+                </div>
+              </div>
+
+              {onlineTicketError && (
+                <p className="mt-3 rounded-md border border-[#ac312d]/25 bg-[#ac312d]/10 px-3 py-2 text-sm font-semibold text-[#ac312d]">
+                  {onlineTicketError}
+                </p>
+              )}
+
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {renderOnlineTicketAction(onlineOrderModal, "kitchen")}
+                {renderOnlineTicketAction(onlineOrderModal, "bar")}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-[#ebe9e6] px-4 py-3">
+              <button
+                type="button"
+                onClick={closeOnlineOrderModal}
+                className="rounded-md border border-[#d8d2cb] px-4 py-2 text-sm font-semibold text-[#0d0f13]"
+              >
+                Later
+              </button>
+              <button
+                type="button"
+                onClick={closeOnlineOrderModal}
+                disabled={!onlineOrderTicketsComplete(onlineOrderModal)}
+                className="rounded-md bg-[#0d0f13] px-4 py-2 text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {printingOnlineTicket && (
+        <div className="admin-online-ticket-print">
+          <RoundTicket
+            kind={printingOnlineTicket.kind}
+            orderNumber={printingOnlineTicket.order.order_number}
+            orNumber=""
+            items={printingOnlineTicket.items}
+            notes={parseOrderTicketNotes(printingOnlineTicket.order.notes).notes || undefined}
+            cashierName={activeCashier}
+            customerName={printingOnlineTicket.order.customer_name}
+            serviceType="PICKUP"
+            createdAt={new Date(printingOnlineTicket.order.created_at)}
+          />
+        </div>
+      )}
     </div>
   );
 }

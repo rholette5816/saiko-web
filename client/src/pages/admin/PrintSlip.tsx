@@ -1,3 +1,4 @@
+import { cleanOrderNotes } from "@/lib/orderTickets";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
@@ -114,7 +115,7 @@ export default function AdminPrintSlip({ id }: { id: string }) {
             </div>
             <hr className="border-[#d8d2cb]" />
             <p className="font-bold">Total: {currencyPhp(total)}</p>
-            {order.notes && <p>Notes: {order.notes}</p>}
+            {cleanOrderNotes(order.notes) && <p>Notes: {cleanOrderNotes(order.notes)}</p>}
           </div>
         )}
       </div>

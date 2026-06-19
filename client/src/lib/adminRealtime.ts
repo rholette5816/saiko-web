@@ -5,6 +5,7 @@ export interface NewOrderEvent {
   order_number: string;
   created_at: string;
   customer_name?: string;
+  channel?: string;
 }
 
 export type LiveStatus = "connecting" | "live" | "offline";
@@ -34,6 +35,7 @@ function ensureChannel() {
         order_number: String(row.order_number ?? "SAIKO-NEW"),
         created_at: String(row.created_at ?? new Date().toISOString()),
         customer_name: typeof row.customer_name === "string" ? row.customer_name : undefined,
+        channel: typeof row.channel === "string" ? row.channel : undefined,
       };
       if (!order.id || seenOrderIds.has(order.id)) return;
       seenOrderIds.add(order.id);
