@@ -829,7 +829,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
   return (
     <AdminLayout>
-      <section className="space-y-3 md:h-[calc(100vh-10.5rem)] md:overflow-hidden">
+      <section className="space-y-2 md:h-[calc(100vh-8.75rem)] md:overflow-hidden">
         <style>{`
           .print-tickets-root, .print-bill-root { display: none; }
           @media print {
@@ -848,7 +848,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         `}</style>
 
         <div className="table-order-screen md:h-full md:flex md:flex-col">
-          <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mb-2 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <Link href="/admin/tables" className="mb-1 inline-flex items-center gap-2 text-sm font-semibold text-[#705d48]">
                 <ArrowLeft size={16} />
@@ -911,8 +911,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-3 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1.5fr)_minmax(380px,1fr)]">
-            <div className="rounded-xl border border-[#d8d2cb] bg-white p-3 md:flex md:h-full md:min-h-0 md:flex-col md:p-4">
+          <div className="grid grid-cols-1 gap-3 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1.8fr)_minmax(400px,0.9fr)] lg:grid-cols-[minmax(0,2.1fr)_minmax(430px,0.9fr)] xl:gap-4">
+            <div className="rounded-xl border border-[#d8d2cb] bg-white p-3 md:flex md:h-full md:min-h-0 md:flex-col">
               <div className="flex flex-col gap-3">
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {categories.map((category) => (
@@ -940,13 +940,13 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                 </label>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 overflow-y-auto pr-1 md:min-h-0 md:flex-1 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              <div className="mt-3 grid grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 md:min-h-0 md:flex-1 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                 {filteredItems.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => addToOrder(item)}
-                    className="min-h-[108px] rounded-lg border border-[#ebe9e6] bg-white p-2.5 text-left transition-colors hover:border-[#c08643] md:min-h-[100px]"
+                    className="min-h-[104px] rounded-lg border border-[#ebe9e6] bg-white p-2.5 text-left transition-colors hover:border-[#c08643] md:min-h-[96px]"
                   >
                     {item.image ? (
                       <img src={item.image} alt={item.name} className="mb-1.5 h-12 w-full rounded-md object-cover" loading="lazy" />
@@ -1016,7 +1016,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                 <h2 className="text-base font-bold uppercase tracking-wide text-[#0d0f13]">Current Round</h2>
                 <p className="mt-1 text-xs text-[#705d48]">{orderItems.length} line items</p>
 
-                <div className="mt-2 max-h-[28vh] space-y-2 overflow-y-auto pr-1">
+                <div className="mt-2 max-h-[30vh] space-y-2 overflow-y-auto pr-1 xl:max-h-[34vh]">
                   {orderItems.length === 0 ? (
                     <p className="py-3 text-sm text-[#705d48]">Tap menu items to start this round.</p>
                   ) : (

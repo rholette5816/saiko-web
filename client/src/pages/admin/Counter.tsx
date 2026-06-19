@@ -465,7 +465,7 @@ export default function AdminCounter() {
         <h2 className="text-base font-bold text-[#0d0f13] uppercase tracking-wide">Current Order</h2>
         <p className="text-xs text-[#705d48] mt-1">{orderItems.length} line items</p>
 
-        <div className="mt-2 max-h-[26vh] md:max-h-[27vh] overflow-y-auto space-y-2 pr-1">
+        <div className="mt-2 max-h-[26vh] space-y-2 overflow-y-auto pr-1 md:max-h-[32vh]">
           {orderItems.length === 0 ? (
             <p className="text-sm text-[#705d48] py-3">Tap menu items to start.</p>
           ) : (
@@ -728,7 +728,7 @@ export default function AdminCounter() {
 
   return (
     <AdminLayout>
-      <section className="space-y-3 md:h-[calc(100vh-10.5rem)] md:overflow-hidden">
+      <section className="space-y-2 md:h-[calc(100vh-8.75rem)] md:overflow-hidden">
         <style>{`
           .print-receipt-root, .print-ticket-root { display: none; }
           @media print {
@@ -738,7 +738,7 @@ export default function AdminCounter() {
         `}</style>
 
         <div className="counter-screen md:h-full md:flex md:flex-col">
-          <div className="mb-2">
+          <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <h1 className="text-2xl font-bold text-[#0d0f13]">Counter Mode</h1>
             <p className="text-sm text-[#705d48]">Walk-in order entry, VAT/Senior handling, and receipt printing.</p>
           </div>
@@ -750,7 +750,7 @@ export default function AdminCounter() {
           )}
 
           {lastCompletedOrder && (
-            <div className="mb-3 rounded-lg border border-[#2d7a3e]/25 bg-[#2d7a3e]/10 p-3">
+            <div className="mb-2 rounded-lg border border-[#2d7a3e]/25 bg-[#2d7a3e]/10 p-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-[#1d5e2e]">
@@ -782,8 +782,8 @@ export default function AdminCounter() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.5fr)_minmax(380px,1fr)] gap-3 md:flex-1 md:min-h-0">
-            <div className="bg-white rounded-xl border border-[#d8d2cb] p-3 md:p-4 md:h-full md:min-h-0 md:flex md:flex-col">
+          <div className="grid grid-cols-1 gap-3 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1.8fr)_minmax(400px,0.9fr)] lg:grid-cols-[minmax(0,2.1fr)_minmax(420px,0.9fr)] xl:gap-4">
+            <div className="bg-white rounded-xl border border-[#d8d2cb] p-3 md:h-full md:min-h-0 md:flex md:flex-col">
               <div className="flex flex-col gap-3">
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {categories.map((category) => (
@@ -813,13 +813,13 @@ export default function AdminCounter() {
                 </label>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 md:flex-1 md:min-h-0 overflow-y-auto pr-1">
+              <div className="mt-3 grid grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 md:min-h-0 md:flex-1 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                 {filteredItems.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => addToOrder(item)}
-                    className="bg-white border border-[#ebe9e6] rounded-lg p-2.5 text-left min-h-[108px] md:min-h-[100px] hover:border-[#c08643] transition-colors"
+                    className="min-h-[104px] rounded-lg border border-[#ebe9e6] bg-white p-2.5 text-left transition-colors hover:border-[#c08643] md:min-h-[96px]"
                   >
                     {item.image ? (
                       <img

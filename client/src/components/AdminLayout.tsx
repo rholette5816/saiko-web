@@ -117,7 +117,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         }
       `}</style>
       <header className="admin-shell-header border-b border-[#d8d2cb] bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 justify-between">
+        <div className="w-full max-w-[1800px] mx-auto px-3 sm:px-4 lg:px-5 py-3 flex items-center gap-3 justify-between">
           <Link href={role === "staff" ? "/admin/tables" : "/admin"} className="inline-flex items-center gap-3">
             <img src={logo} alt="Saiko" className="h-9 w-auto" />
             <span className="text-sm font-semibold uppercase tracking-wide text-[#705d48]">
@@ -212,7 +212,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="admin-shell-main-wrap max-w-7xl mx-auto md:grid md:grid-cols-[220px_1fr] md:gap-6 px-4 sm:px-6 py-4 md:py-6">
+      <div className="admin-shell-main-wrap w-full max-w-[1800px] mx-auto md:grid md:grid-cols-[208px_minmax(0,1fr)] md:gap-4 px-3 sm:px-4 lg:px-5 py-3 md:py-4">
         <aside className="admin-shell-aside mb-4 md:mb-0">
           <nav className="bg-[#0d0f13] rounded-lg p-2 flex md:flex-col gap-2 overflow-x-auto">
             {navItems.map((item) => {
@@ -243,7 +243,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           </nav>
         </aside>
 
-        <main>{children}</main>
+        <main className="min-w-0">{children}</main>
       </div>
     </div>
   );

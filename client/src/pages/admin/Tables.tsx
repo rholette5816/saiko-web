@@ -100,7 +100,7 @@ export default function AdminTables() {
 
   return (
     <AdminLayout>
-      <section className="space-y-4">
+      <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-[#0d0f13]">Tables</h1>
@@ -130,7 +130,7 @@ export default function AdminTables() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8">
           {TABLES.map((table) => {
             const status = statusByTable.get(table.id);
             const isOpen = Boolean(status);
@@ -139,7 +139,7 @@ export default function AdminTables() {
                 key={table.id}
                 type="button"
                 onClick={() => navigate(`/admin/tables/${table.id}`)}
-                className={`min-h-[150px] rounded-lg border p-4 text-left transition-colors ${
+                className={`min-h-[136px] rounded-lg border p-3 text-left transition-colors ${
                   isOpen
                     ? "border-[#2d7a3e]/40 bg-[#2d7a3e]/10 hover:border-[#2d7a3e]"
                     : "border-[#d8d2cb] bg-[#f6f2ed] hover:border-[#c08643]"
@@ -148,7 +148,7 @@ export default function AdminTables() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Table</p>
-                    <p className="text-4xl font-bold text-[#0d0f13]">{table.number}</p>
+                    <p className="text-3xl font-bold text-[#0d0f13] xl:text-4xl">{table.number}</p>
                     <p className="mt-1 text-sm font-semibold text-[#705d48]">{table.capacity}</p>
                   </div>
                   <span
@@ -160,7 +160,7 @@ export default function AdminTables() {
                   </span>
                 </div>
                 {status && (
-                  <div className="mt-5 rounded-md bg-white/80 px-2.5 py-2 text-xs font-semibold text-[#0d0f13]">
+                  <div className="mt-3 rounded-md bg-white/80 px-2.5 py-2 text-xs font-semibold text-[#0d0f13]">
                     Open | {currencyPhp(status.total)} | {elapsedLabel(status.openedAt)}
                     <div className="mt-0.5 text-[#705d48]">
                       {status.roundCount} {status.roundCount === 1 ? "round" : "rounds"}
