@@ -2,11 +2,23 @@ import { AdminLayout } from "@/components/AdminLayout";
 import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
 import { exportRowsToCsv, type CsvCell } from "@/lib/csvExport";
+import {
+  fetchDailySummary,
+  fetchOrGaps,
+  fetchPaymentMix,
+  fetchProductSales,
+  fetchTableSales,
+  type ChannelFilter,
+  type DailySummaryRow,
+  type OrGapRow,
+  type PaymentMixRow,
+  type ProductSalesRow,
+  type TableSalesRow,
+} from "@/lib/dataCenter";
 import { getCustomRange } from "@/lib/dateRanges";
 import { type OrderItemRow, type OrderRow, supabase } from "@/lib/supabase";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type ChannelFilter = "counter" | "both" | "web";
 type PaymentLabel = "Cash" | "GCash" | "Card" | "Online";
 type PaymentFilter = "all" | PaymentLabel;
 type ReportView = "summary" | "products" | "tables" | "orders";
@@ -119,6 +131,14 @@ function productKey(item: OrderItemRow): string {
   return `${item.item_id}::${item.item_name}`;
 }
 
+function matchesProductValue(itemId: string, itemName: string, selectedProduct: string): boolean {
+  return selectedProduct === "all" || itemId === selectedProduct || `${itemId}::${itemName}` === selectedProduct;
+}
+
+function matchesProductRow(row: ProductSalesRow, selectedProduct: string): boolean {
+  return matchesProductValue(row.item_id, row.item_name, selectedProduct);
+}
+
 function tableValue(order: OrderRow): string {
   const table = String(order.table_number ?? "").trim();
   if (table) return table;
@@ -143,7 +163,7 @@ function filenamePart(value: string): string {
 }
 
 function matchesProduct(item: OrderItemRow, selectedProduct: string): boolean {
-  return selectedProduct === "all" || productKey(item) === selectedProduct;
+  return matchesProductValue(item.item_id, item.item_name, selectedProduct);
 }
 
 function getFilteredItems(order: OrderWithItems, selectedProduct: string): OrderItemRow[] {
@@ -181,6 +201,11 @@ export default function AdminDailyReport() {
   const [searchTerm, setSearchTerm] = useState("");
   const [reportView, setReportView] = useState<ReportView>("summary");
   const [ordersWithItems, setOrdersWithItems] = useState<OrderWithItems[]>([]);
+  const [summaryRows, setSummaryRows] = useState<DailySummaryRow[]>([]);
+  const [productRowsRpc, setProductRowsRpc] = useState<ProductSalesRow[]>([]);
+  const [tableRowsRpc, setTableRowsRpc] = useState<TableSalesRow[]>([]);
+  const [orGaps, setOrGaps] = useState<OrGapRow[]>([]);
+  const [paymentMixRpc, setPaymentMixRpc] = useState<PaymentMixRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [thermalMode, setThermalMode] = useState(false);
@@ -190,30 +215,61 @@ export default function AdminDailyReport() {
     setLoading(true);
     setError(null);
 
-    const { startIso, endIso } = manilaRangeBoundaries(startDate, endDate);
+    const normalized = normalizeDateRange(startDate, endDate);
+    const start = normalized.startYmd;
+    const end = normalized.endYmd;
 
-    let query = supabase
-      .from("orders")
-      .select("*, order_items(*)")
-      .gte("created_at", startIso)
-      .lt("created_at", endIso)
-      .order("created_at", { ascending: true });
+    const ordersPromise =
+      reportView === "orders"
+        ? (async () => {
+            const { startIso, endIso } = manilaRangeBoundaries(startDate, endDate);
 
-    if (channel === "counter") query = query.eq("channel", "counter");
-    if (channel === "web") query = query.eq("channel", "web");
+            let query = supabase
+              .from("orders")
+              .select("*, order_items(*)")
+              .gte("created_at", startIso)
+              .lt("created_at", endIso)
+              .order("created_at", { ascending: true });
 
-    const { data, error: fetchError } = await query;
-    if (fetchError) {
-      setError(fetchError.message);
+            if (channel === "counter") query = query.eq("channel", "counter");
+            if (channel === "web") query = query.eq("channel", "web");
+
+            const { data, error: fetchError } = await query;
+            if (fetchError) throw fetchError;
+            return (data ?? []) as OrderWithItems[];
+          })()
+        : Promise.resolve([] as OrderWithItems[]);
+
+    try {
+      const [nextSummaryRows, nextProductRows, nextTableRows, nextOrGaps, nextPaymentMix, nextOrdersWithItems] =
+        await Promise.all([
+          fetchDailySummary({ start, end, channel, status: statusFilter }),
+          fetchProductSales({ start, end, channel }),
+          fetchTableSales({ start, end, channel }),
+          fetchOrGaps({ start, end }),
+          fetchPaymentMix({ start, end, channel }),
+          ordersPromise,
+        ]);
+
+      setSummaryRows(nextSummaryRows);
+      setProductRowsRpc(nextProductRows);
+      setTableRowsRpc(nextTableRows);
+      setOrGaps(nextOrGaps);
+      setPaymentMixRpc(nextPaymentMix);
+      setOrdersWithItems(nextOrdersWithItems);
+      setGeneratedAt(new Date());
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Unable to load report.");
       setOrdersWithItems([]);
+      setSummaryRows([]);
+      setProductRowsRpc([]);
+      setTableRowsRpc([]);
+      setOrGaps([]);
+      setPaymentMixRpc([]);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setOrdersWithItems((data ?? []) as OrderWithItems[]);
-    setGeneratedAt(new Date());
-    setLoading(false);
-  }, [channel, endDate, startDate]);
+  }, [channel, endDate, reportView, startDate, statusFilter]);
 
   useEffect(() => {
     loadReport();
@@ -833,6 +889,24 @@ export default function AdminDailyReport() {
                     </div>
                   )}
                 </section>
+
+                {orGaps.length > 0 && (
+                  <section className="mt-5 rounded-md bg-[#faf8f6] p-3 border-l-4 border-l-[#ac312d]">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-[#0d0f13]">
+                      OR Gaps <span className="text-[#ac312d]">({orGaps.length})</span>
+                    </h3>
+                    <ul className="mt-2 space-y-1 text-sm text-[#0d0f13]">
+                      {orGaps.slice(0, 10).map((gap) => (
+                        <li key={`${gap.prev_or}-${gap.or_number}-${gap.next_or}`}>
+                          {gap.or_number} missing between {gap.prev_or} and {gap.next_or}
+                        </li>
+                      ))}
+                      {orGaps.length > 10 && (
+                        <li className="text-[#705d48]">and {orGaps.length - 10} more</li>
+                      )}
+                    </ul>
+                  </section>
+                )}
 
                 <section className="mt-5 space-y-1.5">
                   <h3 className="text-sm font-bold uppercase tracking-wide text-[#705d48]">Sales Totals</h3>
