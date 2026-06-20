@@ -30,6 +30,7 @@ export interface OrderRow {
   channel?: "web" | "counter" | null;
   table_number?: string | null;
   payment_method?: string | null;
+  payment_reference?: string | null;
   amount_received?: number | null;
   or_number?: string | null;
   vat_amount?: number | null;

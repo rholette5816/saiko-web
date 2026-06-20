@@ -13,7 +13,7 @@ import {
   type HolderType,
 } from "@/lib/discountAllocations";
 import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
-import { paymentMethodOptions, type PaymentMethod } from "@/lib/paymentMethods";
+import { paymentMethodOptions, paymentMethodShortLabel, type PaymentMethod } from "@/lib/paymentMethods";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { TABLES, getTable, type TableDef } from "@/lib/tables";
 import { ArrowLeft, ChevronDown, ChevronRight, Minus, Plus, Search, Trash2, X } from "lucide-react";
@@ -123,6 +123,7 @@ interface TicketPayload {
 interface CloseFormState {
   paymentMethod: PaymentMethod;
   cashReceived: string;
+  paymentReference: string;
 }
 
 interface BillRound {
@@ -171,6 +172,7 @@ interface CloseTableBillResponse {
   vat_exempt_sales?: number | string;
   total?: number | string;
   payment_method?: string | null;
+  payment_reference?: string | null;
   amount_received?: number | string;
   change?: number | string;
   senior_pwd?: boolean;
@@ -191,6 +193,7 @@ interface BillPayload {
   seniorDiscount: number;
   total: number;
   paymentMethod: string;
+  paymentReference?: string | null;
   amountReceived: number;
   change: number;
   seniorPwd: boolean;
@@ -395,6 +398,7 @@ function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSett
     seniorDiscount: Number(raw.senior_discount ?? 0),
     total: Number(raw.total ?? 0),
     paymentMethod: String(raw.payment_method ?? ""),
+    paymentReference: raw.payment_reference ?? null,
     amountReceived: Number(raw.amount_received ?? 0),
     change: Number(raw.change ?? 0),
     seniorPwd: Boolean(raw.senior_pwd) || discounts.length > 0,
@@ -439,6 +443,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [closeForm, setCloseForm] = useState<CloseFormState>({
     paymentMethod: "cash",
     cashReceived: "",
+    paymentReference: "",
   });
   const [discountHolders, setDiscountHolders] = useState<DiscountHolderDraft[]>([]);
   const [printingBill, setPrintingBill] = useState<BillPayload | null>(null);
@@ -617,7 +622,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     }));
   }
 
-  function buildBillPayload(isFinal: boolean, paymentMethod = "", amountReceived = 0, change = 0): BillPayload {
+  function buildBillPayload(isFinal: boolean, paymentMethod = "", amountReceived = 0, change = 0, paymentReference: string | null = null): BillPayload {
     if (!table) throw new Error("Table is required");
     return {
       table,
@@ -631,6 +636,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       seniorDiscount: billPreview.discountAmount,
       total: billPreview.total,
       paymentMethod,
+      paymentReference,
       amountReceived,
       change,
       seniorPwd: billPreview.lines.length > 0,
@@ -1536,6 +1542,12 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       return;
     }
 
+    const paymentReference = closeForm.paymentReference.trim();
+    if (closeForm.paymentMethod !== "cash" && !paymentReference) {
+      setCloseError("Enter the GCash or BPI transaction reference number.");
+      return;
+    }
+
     setClosing(true);
     const amountReceived = closeForm.paymentMethod === "cash" ? Number(closeForm.cashReceived || 0) : billPreview.total;
     const { data, error: rpcError } = await supabase.rpc("close_table_bill", {
@@ -1543,6 +1555,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       p_payment_method: closeForm.paymentMethod,
       p_amount_received: amountReceived,
       p_discount_allocations: buildDiscountAllocationPayload(),
+      p_payment_reference: closeForm.paymentMethod === "cash" ? null : paymentReference,
     });
 
     if (rpcError) {
@@ -2123,7 +2136,13 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                           name="table-payment"
                           value={option.value}
                           checked={closeForm.paymentMethod === option.value}
-                          onChange={() => setCloseForm((current) => ({ ...current, paymentMethod: option.value }))}
+                          onChange={() =>
+                            setCloseForm((current) => ({
+                              ...current,
+                              paymentMethod: option.value,
+                              paymentReference: option.value === "cash" ? "" : current.paymentReference,
+                            }))
+                          }
                         />
                         {option.shortLabel}
                       </label>
@@ -2141,6 +2160,19 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                       value={closeForm.cashReceived}
                       onChange={(event) => setCloseForm((current) => ({ ...current, cashReceived: event.target.value }))}
                       placeholder="0.00"
+                      className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2 text-sm"
+                    />
+                  </div>
+                )}
+
+                {closeForm.paymentMethod !== "cash" && (
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Reference Number</label>
+                    <input
+                      type="text"
+                      value={closeForm.paymentReference}
+                      onChange={(event) => setCloseForm((current) => ({ ...current, paymentReference: event.target.value }))}
+                      placeholder={`${paymentMethodShortLabel(closeForm.paymentMethod)} transaction reference`}
                       className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2 text-sm"
                     />
                   </div>

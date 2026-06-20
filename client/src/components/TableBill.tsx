@@ -44,6 +44,7 @@ interface TableBillProps {
   seniorDiscount: number;
   total: number;
   paymentMethod: string;
+  paymentReference?: string | null;
   amountReceived: number;
   change: number;
   seniorPwd: boolean;
@@ -254,6 +255,12 @@ export function TableBill(props: TableBillProps) {
         <span>P.Type:</span>
         <span className="value">{props.isFinal === false ? "PENDING" : paymentType}</span>
       </div>
+      {props.isFinal !== false && props.paymentReference && (
+        <div className="row">
+          <span>Ref:</span>
+          <span className="value">{props.paymentReference}</span>
+        </div>
+      )}
       <div className="row">
         <span>Cashier:</span>
         <span className="value">{cashierName}</span>

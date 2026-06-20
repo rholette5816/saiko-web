@@ -331,6 +331,7 @@ export default function AdminDailyReport() {
           order.pickup_label,
           order.table_number,
           order.payment_method,
+          order.payment_reference,
           itemNames,
         ].join(" "));
         if (!haystack.includes(query)) return false;
@@ -609,6 +610,7 @@ export default function AdminDailyReport() {
         "Phone",
         "Channel",
         "Payment",
+        "Payment Ref",
         "Items",
         "Subtotal",
         "Discount",
@@ -625,6 +627,7 @@ export default function AdminDailyReport() {
         order.customer_phone,
         order.channel ?? "",
         resolvePaymentLabel(order),
+        order.payment_reference ?? "",
         joinItems(order, productFilter),
         amountForCsv(toNumber(order.subtotal ?? order.total_amount)),
         amountForCsv(orderDiscountTotal(order)),
