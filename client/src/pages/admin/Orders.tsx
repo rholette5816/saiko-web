@@ -216,6 +216,41 @@ export default function AdminOrders() {
       </div>
     );
   }
+  async function applyBulkDelete() {
+    if (!selectedCount || bulkRunning) return;
+
+    const first = window.confirm(
+      `Delete ${selectedCount} selected order(s)? This permanently removes the orders and their items, rounds, notifications, and discounts. This cannot be undone.`,
+    );
+    if (!first) return;
+
+    const typed = window.prompt('Type "DELETE" to confirm permanent deletion.');
+    if (typed !== "DELETE") {
+      setBulkMessage("Delete cancelled. Confirmation text did not match.");
+      return;
+    }
+
+    setBulkRunning(true);
+    setBulkMessage(null);
+
+    const ids = Array.from(selectedIds);
+    const { error: deleteError, count } = await supabase
+      .from("orders")
+      .delete({ count: "exact" })
+      .in("id", ids);
+
+    setSelectedIds(new Set());
+    setBulkRunning(false);
+
+    if (deleteError) {
+      setBulkMessage(`Delete failed: ${deleteError.message}`);
+    } else {
+      setBulkMessage(`Deleted ${count ?? ids.length} order(s).`);
+    }
+
+    await fetchOrders(true);
+  }
+
   async function applyBulkStatus(nextStatus: BulkStatusAction) {
     if (!selectedCount || bulkRunning) return;
 
@@ -324,6 +359,14 @@ export default function AdminOrders() {
                 {action.label}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={applyBulkDelete}
+              disabled={bulkRunning}
+              className="px-3 py-1.5 rounded-md bg-[#ac312d] text-white text-xs font-bold disabled:opacity-60"
+            >
+              Delete
+            </button>
             {bulkRunning && <span className="text-xs text-white/90">Applying...</span>}
           </div>
         )}
