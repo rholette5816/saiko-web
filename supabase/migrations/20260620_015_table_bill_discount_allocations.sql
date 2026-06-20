@@ -229,7 +229,8 @@ begin
 
   update tmp_table_bill_discount_lines
      set discount_amount = round(vat_exempt_sales * discount_rate / 100, 2),
-         net_amount = greatest(vat_exempt_sales - round(vat_exempt_sales * discount_rate / 100, 2), 0);
+         net_amount = greatest(vat_exempt_sales - round(vat_exempt_sales * discount_rate / 100, 2), 0)
+   where true;
 
   select
     coalesce(sum(gross_amount), 0),

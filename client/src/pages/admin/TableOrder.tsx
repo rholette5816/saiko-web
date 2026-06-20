@@ -88,6 +88,7 @@ interface OpenTableOrderRow {
   total_amount?: number | string | null;
   table_number?: string | null;
   linked_tables?: string[] | null;
+  billed_out_at?: string | null;
 }
 
 interface OrderRoundRow {
@@ -429,7 +430,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [printingTicketVoided, setPrintingTicketVoided] = useState(false);
   const [printingByTicket, setPrintingByTicket] = useState<Record<string, boolean>>({});
   const [billingOut, setBillingOut] = useState(false);
-  const [hasBilledOut, setHasBilledOut] = useState(false);
+  const hasBilledOut = Boolean(openOrder?.billed_out_at);
   const [closing, setClosing] = useState(false);
   const [showBillOutModal, setShowBillOutModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -883,7 +884,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setError(null);
     const { data: orderData, error: orderError } = await supabase
       .from("orders")
-      .select("id, order_number, or_number, created_at, subtotal, total_amount, table_number, linked_tables")
+      .select("id, order_number, or_number, created_at, subtotal, total_amount, table_number, linked_tables, billed_out_at")
       .or(`table_number.eq.${table.id},linked_tables.cs.{${table.id}}`)
       .in("status", ["preparing", "ready"])
       .order("created_at", { ascending: true })
@@ -1142,7 +1143,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setNotes("");
     setExpandedRounds((current) => new Set(current).add(row.round_id));
     setSubmittingRound(false);
-    setHasBilledOut(false);
     setDiscountHolders([]);
     await loadRounds();
   }
@@ -1191,7 +1191,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setOrderItems([]);
     setNotes("");
     setSubmittingRound(false);
-    setHasBilledOut(false);
     setDiscountHolders([]);
     await loadRounds();
   }
@@ -1459,10 +1458,17 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       return;
     }
     setBillingOut(true);
+    const { error: rpcError } = await supabase.rpc("mark_table_billed_out", {
+      p_table_number: table.id,
+    });
+    if (rpcError) {
+      setError(rpcError.message);
+      setBillingOut(false);
+      return;
+    }
     setPrintingBill(buildBillPayload(false));
     setShowBillOutModal(false);
     setBillingOut(false);
-    setHasBilledOut(true);
     await loadRounds();
   }
   async function handleConfirmCloseBill() {
