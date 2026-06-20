@@ -28,6 +28,7 @@ import AdminTables from "./pages/admin/Tables";
 import AdminTableOrder from "./pages/admin/TableOrder";
 import AdminSettings from "./pages/admin/Settings";
 import AdminDailyReport from "./pages/admin/DailyReport";
+import AdminDataCenter from "./pages/admin/DataCenter";
 import AdminHelp from "./pages/admin/Help";
 
 function ScrollToTop() {
@@ -94,6 +95,11 @@ function Router() {
         <Route path={"/admin/reports/daily"}>
           <AdminGuard adminOnly>
             <AdminDailyReport />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/data-center"}>
+          <AdminGuard adminOnly>
+            <AdminDataCenter />
           </AdminGuard>
         </Route>
         <Route path={"/admin/products"}>
