@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 interface OpenOrderRow {
   id: string;
   table_number: string | null;
+  linked_tables: string[] | null;
   total_amount: number | string | null;
   created_at: string;
 }
@@ -16,6 +17,8 @@ interface TableStatus {
   roundCount: number;
   total: number;
   openedAt: string;
+  anchorTable: string;
+  mergedWith: string[];
 }
 
 function currencyPhp(value: number): string {
@@ -43,7 +46,7 @@ export default function AdminTables() {
     setError(null);
     const { data, error: loadError } = await supabase
       .from("orders")
-      .select("id, table_number, total_amount, created_at")
+      .select("id, table_number, linked_tables, total_amount, created_at")
       .in("status", ["preparing", "ready"])
       .not("table_number", "is", null);
 
@@ -74,21 +77,18 @@ export default function AdminTables() {
     const grouped = new Map<string, TableStatus>();
     for (const order of openOrders) {
       if (!order.table_number) continue;
-      const current = grouped.get(order.table_number);
-      if (!current) {
-        grouped.set(order.table_number, {
-          roundCount: 1,
-          total: Number(order.total_amount ?? 0),
-          openedAt: order.created_at,
-        });
-        continue;
+      const mergedWith = (order.linked_tables ?? []).filter(Boolean);
+      const status: TableStatus = {
+        roundCount: 1,
+        total: Number(order.total_amount ?? 0),
+        openedAt: order.created_at,
+        anchorTable: order.table_number,
+        mergedWith,
+      };
+      grouped.set(order.table_number, status);
+      for (const linkedTable of mergedWith) {
+        grouped.set(linkedTable, status);
       }
-
-      grouped.set(order.table_number, {
-        roundCount: current.roundCount + 1,
-        total: current.total + Number(order.total_amount ?? 0),
-        openedAt: new Date(order.created_at).getTime() < new Date(current.openedAt).getTime() ? order.created_at : current.openedAt,
-      });
     }
     return grouped;
   }, [openOrders]);
@@ -165,6 +165,15 @@ export default function AdminTables() {
                     <div className="mt-0.5 text-[#705d48]">
                       {status.roundCount} {status.roundCount === 1 ? "round" : "rounds"}
                     </div>
+                    {(status.anchorTable !== table.id || status.mergedWith.length > 0) && (
+                      <div className="mt-1 text-[#c08643]">
+                        {status.anchorTable !== table.id
+                          ? `Merged with Table ${TABLES.find((t) => t.id === status.anchorTable)?.number ?? status.anchorTable}`
+                          : `Merged with ${status.mergedWith
+                              .map((id) => `Table ${TABLES.find((t) => t.id === id)?.number ?? id}`)
+                              .join(", ")}`}
+                      </div>
+                    )}
                   </div>
                 )}
               </button>

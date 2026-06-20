@@ -86,6 +86,8 @@ interface OpenTableOrderRow {
   created_at: string;
   subtotal?: number | string | null;
   total_amount?: number | string | null;
+  table_number?: string | null;
+  linked_tables?: string[] | null;
 }
 
 interface OrderRoundRow {
@@ -444,6 +446,10 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [selectedMoveTable, setSelectedMoveTable] = useState("");
   const [movingRoundId, setMovingRoundId] = useState<string | null>(null);
   const [occupiedTables, setOccupiedTables] = useState<Set<string>>(new Set());
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [selectedMergeTable, setSelectedMergeTable] = useState("");
+  const [merging, setMerging] = useState(false);
+  const [unmergingTable, setUnmergingTable] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
 
@@ -487,6 +493,19 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const moveTableOptions = useMemo(
     () => TABLES.filter((candidate) => candidate.id !== table?.id),
     [table?.id],
+  );
+
+  const linkedTables = openOrder?.linked_tables ?? [];
+
+  const mergeTableOptions = useMemo(
+    () =>
+      TABLES.filter(
+        (candidate) =>
+          candidate.id !== table?.id &&
+          candidate.id !== openOrder?.table_number &&
+          !linkedTables.includes(candidate.id),
+      ),
+    [table?.id, openOrder?.table_number, linkedTables],
   );
 
   const filteredItems = useMemo(() => {
@@ -864,8 +883,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setError(null);
     const { data: orderData, error: orderError } = await supabase
       .from("orders")
-      .select("id, order_number, or_number, created_at, subtotal, total_amount")
-      .eq("table_number", table.id)
+      .select("id, order_number, or_number, created_at, subtotal, total_amount, table_number, linked_tables")
+      .or(`table_number.eq.${table.id},linked_tables.cs.{${table.id}}`)
       .in("status", ["preparing", "ready"])
       .order("created_at", { ascending: true })
       .limit(1);
@@ -932,7 +951,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     void loadRounds();
     const channel = supabase
       .channel(`table-rounds-${table.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `table_number=eq.${table.id}` }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
         void loadRounds();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "order_rounds" }, () => {
@@ -1237,12 +1256,87 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   async function loadOccupiedTables() {
     const { data, error: occupiedError } = await supabase
       .from("orders")
-      .select("table_number")
+      .select("table_number, linked_tables")
       .in("status", ["preparing", "ready"])
       .not("table_number", "is", null);
 
     if (occupiedError) return;
-    setOccupiedTables(new Set((data ?? []).map((row) => String(row.table_number))));
+    const next = new Set<string>();
+    for (const row of data ?? []) {
+      if (row.table_number) next.add(String(row.table_number));
+      for (const linked of (row.linked_tables ?? []) as string[]) {
+        if (linked) next.add(String(linked));
+      }
+    }
+    setOccupiedTables(next);
+  }
+
+  function beginMergeTable() {
+    if (!canManageBilling) {
+      setError("Only the cashier can merge tables.");
+      return;
+    }
+    if (roundManagementDisabled || !openOrder) {
+      setError(roundManagementTitle ?? "This table order cannot be merged now.");
+      return;
+    }
+
+    setSelectedMergeTable("");
+    setShowMergeModal(true);
+    setError(null);
+    void loadOccupiedTables();
+  }
+
+  async function handleConfirmMergeTable() {
+    if (!openOrder || !selectedMergeTable || merging) return;
+    if (!canManageBilling) {
+      setError("Only the cashier can merge tables.");
+      return;
+    }
+
+    setMerging(true);
+    setError(null);
+
+    const { error: rpcError } = await supabase.rpc("merge_table_into_order", {
+      p_order_id: openOrder.id,
+      p_table_number: selectedMergeTable,
+    });
+
+    if (rpcError) {
+      setError(rpcError.message);
+      setMerging(false);
+      return;
+    }
+
+    setShowMergeModal(false);
+    setSelectedMergeTable("");
+    setMerging(false);
+    await loadRounds();
+  }
+
+  async function handleUnmergeTable(tableId: string) {
+    if (!openOrder || unmergingTable) return;
+    if (!canManageBilling) {
+      setError("Only the cashier can unmerge tables.");
+      return;
+    }
+
+    setUnmergingTable(tableId);
+    setError(null);
+
+    const { error: rpcError } = await supabase.rpc("unmerge_table_from_order", {
+      p_order_id: openOrder.id,
+      p_table_number: tableId,
+    });
+
+    if (rpcError) {
+      setError(rpcError.message);
+      setUnmergingTable(null);
+      return;
+    }
+
+    setUnmergingTable(null);
+    await loadRounds();
   }
 
   function beginMoveRound(round: RoundWithItems) {
@@ -1552,9 +1646,45 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   ? `Open since ${formatTime(openSince ?? new Date())} | ${currencyPhp(runningSubtotal)} running`
                   : "No open rounds yet."}
               </p>
+              {linkedTables.length > 0 && (
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-[#705d48]">
+                  <span className="font-semibold">Merged with:</span>
+                  {linkedTables.map((linkedId) => {
+                    const linkedDef = TABLES.find((candidate) => candidate.id === linkedId);
+                    return (
+                      <span
+                        key={linkedId}
+                        className="inline-flex items-center gap-1 rounded-full bg-[#c08643]/10 px-2 py-0.5 text-xs font-bold text-[#c08643]"
+                      >
+                        Table {linkedDef?.number ?? linkedId}
+                        {canManageBilling && !hasBilledOut && (
+                          <button
+                            type="button"
+                            onClick={() => void handleUnmergeTable(linkedId)}
+                            disabled={unmergingTable === linkedId}
+                            className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-[#c08643]/20 disabled:opacity-50"
+                            title={`Unmerge Table ${linkedDef?.number ?? linkedId}`}
+                          >
+                            <X size={10} />
+                          </button>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             {canManageBilling && (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                <button
+                  type="button"
+                  onClick={beginMergeTable}
+                  disabled={!openRounds.length || roundsLoading || settingsLoading || hasBilledOut}
+                  title={hasBilledOut ? "This table has already been billed out" : undefined}
+                  className="inline-flex h-11 items-center justify-center rounded-lg border-2 border-[#c08643] bg-white px-5 text-sm font-bold uppercase tracking-wide text-[#c08643] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Merge Table
+                </button>
                 <button
                   type="button"
                   onClick={() => openRounds[0] && beginMoveRound(openRounds[0])}
@@ -2147,6 +2277,89 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                     type="button"
                     onClick={() => setMoveRound(null)}
                     disabled={movingRoundId === moveRound.id}
+                    className="h-11 rounded-lg border border-[#0d0f13] text-sm font-semibold uppercase tracking-wide text-[#0d0f13] disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showMergeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
+            <div className="w-full max-w-2xl rounded-lg bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-[#0d0f13]">Merge Table</h2>
+                  <p className="mt-1 text-sm text-[#705d48]">
+                    {openOrder?.order_number} | Into Table {table.number}
+                  </p>
+                  <p className="mt-1 text-sm text-[#705d48]">
+                    Merged tables share this one bill. Occupied tables can't be chosen.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMergeModal(false)}
+                  disabled={merging}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#d8d2cb] text-[#0d0f13] disabled:opacity-50"
+                  title="Close modal"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <div className="grid max-h-[50vh] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4 md:grid-cols-5">
+                  {mergeTableOptions.map((option) => {
+                    const isOccupied = occupiedTables.has(option.id);
+                    const isSelected = selectedMergeTable === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        disabled={isOccupied || merging}
+                        onClick={() => setSelectedMergeTable(option.id)}
+                        className={`min-h-[88px] rounded-lg border p-2 text-left transition-colors ${
+                          isOccupied
+                            ? "cursor-not-allowed border-[#d8d2cb] bg-[#f6f2ed] opacity-60"
+                            : isSelected
+                              ? "border-[#c08643] bg-[#c08643]/10"
+                              : "border-[#d8d2cb] bg-white hover:border-[#c08643]"
+                        }`}
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Table</p>
+                        <p className="text-2xl font-bold text-[#0d0f13]">{option.number}</p>
+                        <p className="text-xs font-semibold text-[#705d48]">{option.capacity}</p>
+                        <span
+                          className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            isOccupied ? "bg-[#705d48] text-white" : "bg-[#ebe9e6] text-[#705d48]"
+                          }`}
+                        >
+                          {isOccupied ? "Occupied" : "Free"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {error && <p className="text-sm font-semibold text-[#ac312d]">{error}</p>}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleConfirmMergeTable()}
+                    disabled={!selectedMergeTable || merging}
+                    className="h-11 rounded-lg bg-[#c08643] text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50"
+                  >
+                    {merging ? "Merging..." : "Confirm Merge"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowMergeModal(false)}
+                    disabled={merging}
                     className="h-11 rounded-lg border border-[#0d0f13] text-sm font-semibold uppercase tracking-wide text-[#0d0f13] disabled:opacity-50"
                   >
                     Cancel
