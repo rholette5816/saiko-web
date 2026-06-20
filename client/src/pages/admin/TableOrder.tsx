@@ -443,6 +443,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [moveRound, setMoveRound] = useState<RoundWithItems | null>(null);
   const [selectedMoveTable, setSelectedMoveTable] = useState("");
   const [movingRoundId, setMovingRoundId] = useState<string | null>(null);
+  const [occupiedTables, setOccupiedTables] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
 
@@ -1233,6 +1234,17 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     }
   }
 
+  async function loadOccupiedTables() {
+    const { data, error: occupiedError } = await supabase
+      .from("orders")
+      .select("table_number")
+      .in("status", ["preparing", "ready"])
+      .not("table_number", "is", null);
+
+    if (occupiedError) return;
+    setOccupiedTables(new Set((data ?? []).map((row) => String(row.table_number))));
+  }
+
   function beginMoveRound(round: RoundWithItems) {
     if (!canManageBilling) {
       setError("Only the cashier can move this table order.");
@@ -1244,8 +1256,9 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     }
 
     setMoveRound(round);
-    setSelectedMoveTable(moveTableOptions[0]?.id ?? "");
+    setSelectedMoveTable("");
     setError(null);
+    void loadOccupiedTables();
   }
 
   async function handleConfirmMoveRound() {
@@ -2060,14 +2073,14 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
         {moveRound && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
-            <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+            <div className="w-full max-w-2xl rounded-lg bg-white p-5 shadow-xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-bold text-[#0d0f13]">Move Table</h2>
                   <p className="mt-1 text-sm text-[#705d48]">
                     {moveRound.order_number} | From Table {table.number}
                   </p>
-                  <p className="mt-1 text-sm text-[#705d48]">This moves the entire table order.</p>
+                  <p className="mt-1 text-sm text-[#705d48]">This moves the entire table order. Occupied tables can't be chosen.</p>
                 </div>
                 <button
                   type="button"
@@ -2081,25 +2094,44 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               </div>
 
               <div className="mt-4 space-y-4">
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Destination Table</label>
-                  <select
-                    value={selectedMoveTable}
-                    onChange={(event) => setSelectedMoveTable(event.target.value)}
-                    className="mt-1 h-11 w-full rounded-lg border border-[#d8d2cb] bg-white px-3 text-sm font-semibold text-[#0d0f13]"
-                  >
-                    {moveTableOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        Table {option.number} | {option.capacity}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedMoveTableDef && (
-                    <p className="mt-1 text-xs text-[#705d48]">
-                      Moving to Table {selectedMoveTableDef.number} | {selectedMoveTableDef.capacity}
-                    </p>
-                  )}
+                <div className="grid max-h-[50vh] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4 md:grid-cols-5">
+                  {moveTableOptions.map((option) => {
+                    const isOccupied = occupiedTables.has(option.id);
+                    const isSelected = selectedMoveTable === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        disabled={isOccupied || movingRoundId === moveRound.id}
+                        onClick={() => setSelectedMoveTable(option.id)}
+                        className={`min-h-[88px] rounded-lg border p-2 text-left transition-colors ${
+                          isOccupied
+                            ? "cursor-not-allowed border-[#d8d2cb] bg-[#f6f2ed] opacity-60"
+                            : isSelected
+                              ? "border-[#c08643] bg-[#c08643]/10"
+                              : "border-[#d8d2cb] bg-white hover:border-[#c08643]"
+                        }`}
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Table</p>
+                        <p className="text-2xl font-bold text-[#0d0f13]">{option.number}</p>
+                        <p className="text-xs font-semibold text-[#705d48]">{option.capacity}</p>
+                        <span
+                          className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            isOccupied ? "bg-[#705d48] text-white" : "bg-[#ebe9e6] text-[#705d48]"
+                          }`}
+                        >
+                          {isOccupied ? "Occupied" : "Free"}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {selectedMoveTableDef && (
+                  <p className="text-xs text-[#705d48]">
+                    Moving to Table {selectedMoveTableDef.number} | {selectedMoveTableDef.capacity}
+                  </p>
+                )}
 
                 {error && <p className="text-sm font-semibold text-[#ac312d]">{error}</p>}
 
