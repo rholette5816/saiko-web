@@ -8,7 +8,7 @@ Today `client/src/pages/admin/DailyReport.tsx` calls `supabase.from("orders").se
 
 ## Files to create
 
-### 1. `supabase/migrations/20260620_019_data_center_views.sql`
+### 1. `supabase/migrations/20260623_020_data_center_views.sql`
 SQL migration. Postgres only.
 
 Create these views and RPCs. All RPCs are `security definer`, `set search_path = public`, `revoke all from public`, `grant execute to authenticated`.
@@ -292,7 +292,7 @@ None.
 ## Acceptance criteria
 - [ ] `grep -rn "[—–]" client/src` returns nothing
 - [ ] `npx tsc --noEmit` passes
-- [ ] `supabase/migrations/20260620_019_data_center_views.sql` exists and contains all five views and RPCs listed above.
+- [ ] `supabase/migrations/20260623_020_data_center_views.sql` exists and contains all five views and RPCs listed above.
 - [ ] `client/src/lib/dataCenter.ts` exists and exports the five functions and five row types.
 - [ ] `DailyReport.tsx` no longer references `order_items` in any code path other than the Orders tab.
 - [ ] When the Orders tab is not selected, the page does not fetch `orders` at all (only RPCs).
@@ -308,7 +308,7 @@ None.
 - Anything in `Counter.tsx`, `TableOrder.tsx`, `Tables.tsx`.
 
 ## Notes for Codex
-- The migration file name uses sequence `019`. Confirm by looking at the highest existing sequence in `supabase/migrations/` and use that plus one. Do not renumber existing migrations.
+- The migration file name uses sequence `020`, dated `20260623` to sort after the latest existing migration `20260623_019_admin_only_products.sql`. Use this exact filename. Do not renumber existing migrations.
 - The RPCs intentionally accept date strings (`p_start date`) not timestamps. Supabase casts `YYYY-MM-DD` to date automatically.
 - Aggregating across multiple days in the frontend: when summing product or table rows across days, group by `item_id` (for products) or `table_label` (for tables) and sum the numeric columns. Use a `Map` for grouping, then `Array.from(map.values())`.
 - The OR gaps RPC: do not assume OR numbers are zero padded with a fixed width. Pad missing values using the width of `prev_or` if both bounds have the same width, otherwise emit the raw integer as text.
