@@ -11,8 +11,8 @@ Runs 1 and 2 must be merged. `client/src/pages/admin/DataCenter.tsx`, `client/sr
 
 ## Files to create
 
-### 1. `supabase/migrations/20260623_021_cash_drawer_closings.sql`
-SQL migration. Sequence `021` follows Run 1's `020`. Date prefix `20260623` keeps file ordering consistent. Do not pick a different number even if the directory contains other migrations dated later.
+### 1. `supabase/migrations/20260623_023_cash_drawer_closings.sql`
+SQL migration. Sequence `023` follows the existing `022_bpi_payment_method_bucket.sql`. Date prefix `20260623` keeps file ordering consistent. Do not pick a different number even if the directory contains other migrations dated later.
 
 #### Table `cash_drawer_closings`
 Columns:

@@ -168,10 +168,12 @@ interface PaymentMixDonutProps {
 ```
 
 Visual:
-- SVG donut, 4 segments max. Colors in order: Cash `#0d0f13`, GCash `#c08643`, Card `#e88627`, Online `#705d48`.
+- SVG donut, 4 segments max. Colors in order: Cash `#0d0f13`, GCash `#c08643`, Bank Transfer BPI `#e88627`, Online `#705d48`.
 - Center text: total order count.
 - Legend below: payment label, count, formatted PHP amount.
 - If rows is empty, render a muted message "No completed orders." with the donut hidden.
+
+Important: the `PaymentMixRow.payment_label` union now uses `"Bank Transfer BPI"` (not the legacy `"Card"`). Source of truth is `client/src/lib/paymentMethods.ts` (`PaymentLabel`, `PAYMENT_LABEL_ORDER`). Always derive the segment order from `PAYMENT_LABEL_ORDER` so future label changes flow through without touching this component.
 
 ### 7. `client/src/components/dataCenter/TopItemsList.tsx`
 Compact list for top items. Named export `TopItemsList`.
