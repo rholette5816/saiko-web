@@ -159,7 +159,7 @@ export default function Help() {
                 <li>Tap menu items to add them to the order on the right.</li>
                 <li>Tap again or use <strong>+</strong> to add more of the same item.</li>
                 <li>Type the customer's name (optional). Leave blank if they don't want to give it.</li>
-                <li>Pick payment method: <strong>CASH</strong>, <strong>GCASH</strong>, or <strong>CARD</strong>.</li>
+                <li>Pick payment method: <strong>CASH</strong>, <strong>GCASH</strong>, or <strong>BPI TRANSFER</strong>.</li>
                 <li>If cash, type how much they handed you. The system shows change due automatically.</li>
                 <li>If senior or PWD, tick the box and type their ID and name.</li>
                 <li>Tap <strong>Submit and Print</strong>. The receipt prints.</li>
@@ -204,9 +204,9 @@ export default function Help() {
                 <li>Trash icon removes a line.</li>
                 <li>Customer Name, Phone, and Notes are optional.</li>
                 <li>Senior Citizen / PWD checkbox: when ticked, two more fields appear (ID Number, Full Name). Gives 20% off the whole order and removes VAT. This is the law.</li>
-                <li>Payment Method buttons: CASH / GCASH / CARD.</li>
+                <li>Payment Method buttons: CASH / GCASH / BPI TRANSFER.</li>
                 <li>For Cash, type the amount handed. Change is shown.</li>
-                <li>For GCash or Card, the amount received equals the total automatically.</li>
+                <li>For GCash or BPI transfer, the amount received equals the total automatically.</li>
                 <li><strong>Submit and Print</strong> is disabled until the order has at least one item.</li>
                 <li><strong>Cancel / Reset</strong> clears everything. Confirms first if the cart has items.</li>
               </ul>
@@ -364,7 +364,7 @@ Salamat at bumalik kayo!`}</pre>
               <ul>
                 <li>Sales totals: gross, discounts (promo and senior/PWD), net.</li>
                 <li>VAT breakdown (only if VAT-registered).</li>
-                <li>Payment method breakdown: Cash, GCash, Card, Online.</li>
+                <li>Payment method breakdown: Cash, GCash, Bank Transfer BPI, Online.</li>
                 <li>Order count: completed plus a separate cancelled count.</li>
                 <li>Top 10 items.</li>
                 <li>OR range: first OR number issued, last one, total count.</li>
@@ -449,7 +449,7 @@ COUNTER: <site>/admin/counter
 NEW WALK-IN:
   1. Tap items on left
   2. Confirm qty on right
-  3. Pick CASH / GCASH / CARD
+  3. Pick CASH / GCASH / BPI TRANSFER
   4. If cash, type amount received
   5. Senior/PWD? Tick + ID + Name
   6. Submit and Print
