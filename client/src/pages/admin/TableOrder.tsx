@@ -1467,14 +1467,13 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   function renderRoundManagementActions(round: RoundWithItems) {
     if (!canManageBilling) return null;
 
-    const busy = submittingRound || cancellingRoundId !== null || movingRoundId !== null;
+    const busy = submittingRound || cancellingRoundId !== null;
     const disabled = roundManagementDisabled || busy;
     const editLabel = editingRoundId === round.id ? "Editing" : "Edit";
     const cancelLabel = cancellingRoundId === round.id ? "Cancelling..." : "Cancel";
-    const moveLabel = movingRoundId === round.id ? "Moving..." : "Move Table";
 
     return (
-      <div className="grid gap-2 px-3 pb-3 sm:grid-cols-3">
+      <div className="grid gap-2 px-3 pb-3 sm:grid-cols-2">
         <button
           type="button"
           onClick={() => beginEditRound(round)}
@@ -1492,15 +1491,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
           className="inline-flex h-9 items-center justify-center rounded-md border border-[#ac312d] bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#ac312d] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {cancelLabel}
-        </button>
-        <button
-          type="button"
-          onClick={() => beginMoveRound(round)}
-          disabled={disabled}
-          title={roundManagementTitle}
-          className="inline-flex h-9 items-center justify-center rounded-md border border-[#c08643] bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#c08643] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {moveLabel}
         </button>
       </div>
     );
@@ -1565,6 +1555,15 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
             </div>
             {canManageBilling && (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                <button
+                  type="button"
+                  onClick={() => openRounds[0] && beginMoveRound(openRounds[0])}
+                  disabled={!openRounds.length || roundsLoading || settingsLoading || hasBilledOut || movingRoundId !== null}
+                  title={hasBilledOut ? "This table has already been billed out" : undefined}
+                  className="inline-flex h-11 items-center justify-center rounded-lg border-2 border-[#c08643] bg-white px-5 text-sm font-bold uppercase tracking-wide text-[#c08643] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Move Table
+                </button>
                 <button
                   type="button"
                   onClick={openBillOutModal}
