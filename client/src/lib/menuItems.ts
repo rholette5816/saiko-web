@@ -24,6 +24,7 @@ interface MenuItemRow {
   badge: MenuBadge | null;
   sort_order: number;
   is_best_seller?: boolean | null;
+  requires_spice_level?: boolean | null;
 }
 
 const legacyAssetImages: Record<string, string> = {
@@ -46,17 +47,24 @@ function toMenuItem(row: MenuItemRow): MenuItem {
     description: row.description ?? undefined,
     image: resolveImage(row.image),
     badge: row.badge ?? (row.is_best_seller ? "bestseller" : undefined),
+    requiresSpiceLevel: row.requires_spice_level ?? false,
   };
 }
 
-export async function fetchMenuCategories(): Promise<MenuCategory[]> {
+export async function fetchMenuCategories(scope: "public" | "admin" = "public"): Promise<MenuCategory[]> {
+  let itemsQuery = supabase
+    .from("menu_items")
+    .select("id, category_id, name, price, description, image, badge, sort_order, is_best_seller, requires_spice_level")
+    .eq("is_available", true)
+    .order("sort_order", { ascending: true });
+
+  if (scope === "public") {
+    itemsQuery = itemsQuery.eq("is_public", true);
+  }
+
   const [categoriesResult, itemsResult] = await Promise.all([
     supabase.from("menu_categories").select("id, name, emoji, sort_order").order("sort_order", { ascending: true }),
-    supabase
-      .from("menu_items")
-      .select("id, category_id, name, price, description, image, badge, sort_order, is_best_seller")
-      .eq("is_available", true)
-      .order("sort_order", { ascending: true }),
+    itemsQuery,
   ]);
 
   if (categoriesResult.error) throw categoriesResult.error;

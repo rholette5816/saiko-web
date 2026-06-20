@@ -14,6 +14,7 @@ export interface MenuItem {
   emoji?: string;
   image?: string;
   badge?: MenuBadge;
+  requiresSpiceLevel?: boolean;
 }
 
 export interface MenuCategory {

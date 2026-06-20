@@ -158,7 +158,7 @@ export default function AdminCounter() {
   const [menuData, setMenuData] = useState<MenuCategory[]>([]);
 
   useEffect(() => {
-    fetchMenuCategories()
+    fetchMenuCategories("admin")
       .then(setMenuData)
       .catch((menuError: Error) => setError(menuError.message));
   }, []);

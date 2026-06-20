@@ -32,10 +32,12 @@ interface TableMenuItem {
   price: number;
   image?: string;
   categoryId: string;
+  requiresSpiceLevel?: boolean;
 }
 
 interface TableCartItem {
   id: string;
+  baseItemId: string;
   name: string;
   price: number;
   quantity: number;
@@ -454,9 +456,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [error, setError] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [menuData, setMenuData] = useState<MenuCategory[]>([]);
+  const [spiceLevelItem, setSpiceLevelItem] = useState<TableMenuItem | null>(null);
+  const [selectedSpiceLevel, setSelectedSpiceLevel] = useState(1);
 
   useEffect(() => {
-    fetchMenuCategories()
+    fetchMenuCategories("admin")
       .then(setMenuData)
       .catch((menuError: Error) => setError(menuError.message));
   }, []);
@@ -478,6 +482,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
           price: item.price,
           image: item.image,
           categoryId: category.id,
+          requiresSpiceLevel: item.requiresSpiceLevel,
         })),
       ),
     [menuData],
@@ -589,7 +594,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
   function buildOrderItemPayload() {
     return orderItems.map((item) => ({
-      item_id: item.id,
+      item_id: item.baseItemId,
       item_name: item.name,
       unit_price: item.price,
       quantity: item.quantity,
@@ -869,7 +874,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         const itemId = item.item_id ?? item.id ?? `${round.id}-${index}`;
         const menuItem = itemById.get(itemId);
         return {
-          id: itemId,
+          id: item.id ?? itemId,
+          baseItemId: itemId,
           name: item.item_name,
           price: Number(item.unit_price ?? 0),
           quantity: Number(item.quantity ?? 0),
@@ -1070,18 +1076,30 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   }, [navigate, printingBill]);
 
   function addToOrder(item: TableMenuItem) {
+    if (item.requiresSpiceLevel) {
+      setSelectedSpiceLevel(1);
+      setSpiceLevelItem(item);
+      return;
+    }
+    addItemToCart(item);
+  }
+
+  function addItemToCart(item: TableMenuItem, spiceLevel?: number) {
+    const cartId = spiceLevel ? `${item.id}-spice-${spiceLevel}` : item.id;
+    const cartName = spiceLevel ? `${item.name} (Level ${spiceLevel})` : item.name;
     setOrderItems((current) => {
-      const existing = current.find((orderItem) => orderItem.id === item.id);
+      const existing = current.find((orderItem) => orderItem.id === cartId);
       if (existing) {
         return current.map((orderItem) =>
-          orderItem.id === item.id ? { ...orderItem, quantity: orderItem.quantity + 1 } : orderItem,
+          orderItem.id === cartId ? { ...orderItem, quantity: orderItem.quantity + 1 } : orderItem,
         );
       }
       return [
         ...current,
         {
-          id: item.id,
-          name: item.name,
+          id: cartId,
+          baseItemId: item.id,
+          name: cartName,
           price: item.price,
           image: item.image,
           quantity: 1,
@@ -1089,6 +1107,12 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         },
       ];
     });
+  }
+
+  function confirmSpiceLevel() {
+    if (!spiceLevelItem) return;
+    addItemToCart(spiceLevelItem, selectedSpiceLevel);
+    setSpiceLevelItem(null);
   }
 
   function updateQuantity(itemId: string, nextQuantity: number) {
@@ -2149,6 +2173,52 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
             </div>
           </div>
         )}
+        {spiceLevelItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
+            <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-[#0d0f13]">Spice Level</h2>
+                  <p className="mt-1 text-sm text-[#705d48]">{spiceLevelItem.name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSpiceLevelItem(null)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#d8d2cb] text-[#0d0f13]"
+                  title="Close modal"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mt-4 grid grid-cols-5 gap-2">
+                {Array.from({ length: 10 }, (_, index) => index + 1).map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setSelectedSpiceLevel(level)}
+                    className={`h-11 rounded-lg border-2 text-sm font-bold ${
+                      selectedSpiceLevel === level
+                        ? "border-[#ac312d] bg-[#ac312d] text-white"
+                        : "border-[#d8d2cb] text-[#0d0f13]"
+                    }`}
+                  >
+                    {level}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={confirmSpiceLevel}
+                className="mt-4 h-11 w-full rounded-lg bg-[#ac312d] text-sm font-bold uppercase tracking-wide text-white"
+              >
+                Add Level {selectedSpiceLevel}
+              </button>
+            </div>
+          </div>
+        )}
+
         {cancelRound && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
             <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
