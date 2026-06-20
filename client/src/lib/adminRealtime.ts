@@ -28,7 +28,7 @@ function ensureChannel() {
   notifyStatus("connecting");
   channelRef = supabase
     .channel("admin-orders-live")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders", filter: "channel=eq.web" }, (payload) => {
       const row = payload.new as Record<string, unknown>;
       const order = {
         id: String(row.id ?? ""),
@@ -37,7 +37,7 @@ function ensureChannel() {
         customer_name: typeof row.customer_name === "string" ? row.customer_name : undefined,
         channel: typeof row.channel === "string" ? row.channel : undefined,
       };
-      if (!order.id || seenOrderIds.has(order.id)) return;
+      if (!order.id || order.channel !== "web" || seenOrderIds.has(order.id)) return;
       seenOrderIds.add(order.id);
       orderListeners.forEach((listener) => listener(order));
     })

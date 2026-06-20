@@ -20,19 +20,30 @@ const SOUND_KEY = "saiko-admin-sound-enabled";
 const UNSEEN_KEY = "saiko-admin-unseen-orders";
 
 function playAlertTone() {
-  const context = new (window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)();
-  if (!context) return;
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.type = "sine";
-  oscillator.frequency.value = 880;
-  gain.gain.value = 0.06;
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-  oscillator.start();
-  oscillator.stop(context.currentTime + 0.18);
-}
+  const AudioContextCtor =
+    window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) return;
 
+  const context = new AudioContextCtor();
+  const now = context.currentTime;
+  [0, 0.22, 0.44].forEach((offset) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.001, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.09, now + offset + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.18);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now + offset);
+    oscillator.stop(now + offset + 0.2);
+  });
+
+  window.setTimeout(() => {
+    void context.close().catch(() => undefined);
+  }, 900);
+}
 const STAFF_NAV_LABELS = new Set(["Tables"]);
 
 interface OnlineOrderItem {
@@ -112,11 +123,14 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const savedSound = localStorage.getItem(SOUND_KEY);
-    setSoundEnabled(savedSound === "1");
+    const nextSoundEnabled = savedSound === null ? true : savedSound === "1";
+    setSoundEnabled(nextSoundEnabled);
+    if (savedSound === null) localStorage.setItem(SOUND_KEY, "1");
     const savedUnseen = localStorage.getItem(UNSEEN_KEY);
     if (savedUnseen) {
       try {
-        setUnseenOrders(JSON.parse(savedUnseen) as NewOrderEvent[]);
+        const savedOrders = JSON.parse(savedUnseen) as NewOrderEvent[];
+        setUnseenOrders(savedOrders.filter((order) => order.channel === "web"));
       } catch {
         setUnseenOrders([]);
       }
@@ -130,6 +144,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = subscribeToOrderInserts(
       (order) => {
+        if (order.channel !== "web") return;
         setUnseenOrders((prev) => {
           if (prev.some((item) => item.id === order.id)) return prev;
           return [order, ...prev].slice(0, 20);
@@ -185,6 +200,12 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       if (current.some((item) => item.id === fullOrder.id)) return current;
       return [...current, fullOrder].slice(0, 8);
     });
+    setOnlineTicketError(null);
+  }
+
+  function acknowledgeOnlineOrder(orderId: string) {
+    setUnseenOrders((prev) => prev.filter((item) => item.id !== orderId));
+    setOnlineOrderQueue((current) => current.filter((item) => item.id !== orderId));
     setOnlineTicketError(null);
   }
 
@@ -356,17 +377,31 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                     <ul className="max-h-64 overflow-y-auto space-y-1">
                       {unseenOrders.map((order) => (
                         <li key={order.id}>
-                          <Link
-                            href={`/admin/orders/${order.id}`}
-                            onClick={() => {
-                              setUnseenOrders((prev) => prev.filter((item) => item.id !== order.id));
-                              setShowNotifications(false);
-                            }}
-                            className="block px-2 py-2 rounded-md hover:bg-[#f6f2ed]"
-                          >
-                            <p className="text-sm font-semibold text-[#0d0f13]">{order.order_number}</p>
-                            <p className="text-xs text-[#705d48]">{order.customer_name ?? "New order"}</p>
-                          </Link>
+                          {role === "staff" ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void loadOnlineOrderForModal(order);
+                                setShowNotifications(false);
+                              }}
+                              className="block w-full rounded-md px-2 py-2 text-left hover:bg-[#f6f2ed]"
+                            >
+                              <p className="text-sm font-semibold text-[#0d0f13]">{order.order_number}</p>
+                              <p className="text-xs text-[#705d48]">{order.customer_name ?? "New order"}</p>
+                            </button>
+                          ) : (
+                            <Link
+                              href={`/admin/orders/${order.id}`}
+                              onClick={() => {
+                                acknowledgeOnlineOrder(order.id);
+                                setShowNotifications(false);
+                              }}
+                              className="block rounded-md px-2 py-2 hover:bg-[#f6f2ed]"
+                            >
+                              <p className="text-sm font-semibold text-[#0d0f13]">{order.order_number}</p>
+                              <p className="text-xs text-[#705d48]">{order.customer_name ?? "New order"}</p>
+                            </Link>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -480,16 +515,25 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                   {onlineOrderQueue.length > 1 && (
                     <p className="mt-1 text-xs text-[#705d48]">{onlineOrderQueue.length - 1} more waiting</p>
                   )}
-                  <Link
-                    href={`/admin/orders/${onlineOrderModal.id}`}
-                    onClick={() => {
-                      setUnseenOrders((prev) => prev.filter((item) => item.id !== onlineOrderModal.id));
-                      closeOnlineOrderModal();
-                    }}
-                    className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#0d0f13] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#0d0f13]"
-                  >
-                    View Order
-                  </Link>
+                  {role === "admin" ? (
+                    <Link
+                      href={`/admin/orders/${onlineOrderModal.id}`}
+                      onClick={() => {
+                        acknowledgeOnlineOrder(onlineOrderModal.id);
+                      }}
+                      className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#0d0f13] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#0d0f13]"
+                    >
+                      View Order
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => acknowledgeOnlineOrder(onlineOrderModal.id)}
+                      className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-[#0d0f13] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#0d0f13]"
+                    >
+                      Mark Seen
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -515,7 +559,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
               </button>
               <button
                 type="button"
-                onClick={closeOnlineOrderModal}
+                onClick={() => acknowledgeOnlineOrder(onlineOrderModal.id)}
                 disabled={!onlineOrderTicketsComplete(onlineOrderModal)}
                 className="rounded-md bg-[#0d0f13] px-4 py-2 text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
