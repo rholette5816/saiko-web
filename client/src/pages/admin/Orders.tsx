@@ -1,4 +1,5 @@
 import { AdminLayout } from "@/components/AdminLayout";
+import { useAuth } from "@/lib/auth";
 import { exportOrdersToCsv } from "@/lib/csvExport";
 import { type DateRange, type DateRangeKey, getCustomRange, getRange } from "@/lib/dateRanges";
 import { getRequiredTicketKinds, getTicketStatus, type TicketKind } from "@/lib/orderTickets";
@@ -68,7 +69,9 @@ function currentDateStamp(): string {
 
 export default function AdminOrders() {
   const [, navigate] = useLocation();
+  const { session } = useAuth();
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
+  const [deleteModal, setDeleteModal] = useState<{ password: string; verifying: boolean; error: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
@@ -216,20 +219,40 @@ export default function AdminOrders() {
       </div>
     );
   }
-  async function applyBulkDelete() {
+  function openDeleteModal() {
     if (!selectedCount || bulkRunning) return;
+    setDeleteModal({ password: "", verifying: false, error: null });
+  }
 
-    const first = window.confirm(
-      `Delete ${selectedCount} selected order(s)? This permanently removes the orders and their items, rounds, notifications, and discounts. This cannot be undone.`,
-    );
-    if (!first) return;
+  function closeDeleteModal() {
+    setDeleteModal(null);
+  }
 
-    const typed = window.prompt('Type "DELETE" to confirm permanent deletion.');
-    if (typed !== "DELETE") {
-      setBulkMessage("Delete cancelled. Confirmation text did not match.");
+  async function confirmDeleteWithPassword() {
+    if (!deleteModal || deleteModal.verifying) return;
+    const email = session?.user?.email;
+    if (!email) {
+      setDeleteModal({ ...deleteModal, error: "No active session. Sign in again." });
+      return;
+    }
+    if (!deleteModal.password) {
+      setDeleteModal({ ...deleteModal, error: "Enter your password." });
       return;
     }
 
+    setDeleteModal({ ...deleteModal, verifying: true, error: null });
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password: deleteModal.password,
+    });
+
+    if (authError) {
+      setDeleteModal({ password: "", verifying: false, error: "Incorrect password." });
+      return;
+    }
+
+    setDeleteModal(null);
     setBulkRunning(true);
     setBulkMessage(null);
 
@@ -361,7 +384,7 @@ export default function AdminOrders() {
             ))}
             <button
               type="button"
-              onClick={applyBulkDelete}
+              onClick={openDeleteModal}
               disabled={bulkRunning}
               className="px-3 py-1.5 rounded-md bg-[#ac312d] text-white text-xs font-bold disabled:opacity-60"
             >
@@ -549,6 +572,56 @@ export default function AdminOrders() {
             </>
           )}
         </div>
+
+        {deleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-white rounded-lg w-full max-w-sm p-5 space-y-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#0d0f13]">Confirm delete</h2>
+                <p className="text-sm text-[#705d48] mt-1">
+                  Deleting {selectedCount} order(s) is permanent. Enter your password to continue.
+                </p>
+              </div>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void confirmDeleteWithPassword();
+                }}
+                className="space-y-3"
+              >
+                <input
+                  type="password"
+                  autoFocus
+                  value={deleteModal.password}
+                  onChange={(event) => setDeleteModal({ ...deleteModal, password: event.target.value, error: null })}
+                  placeholder="Your password"
+                  className="w-full border border-[#d8d2cb] rounded-md px-3 py-2 text-sm"
+                  disabled={deleteModal.verifying}
+                />
+                {deleteModal.error && (
+                  <p className="text-xs font-semibold text-[#ac312d]">{deleteModal.error}</p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeDeleteModal}
+                    disabled={deleteModal.verifying}
+                    className="px-3 py-2 rounded-md bg-[#ebe9e6] text-[#0d0f13] text-sm font-semibold disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={deleteModal.verifying}
+                    className="px-3 py-2 rounded-md bg-[#ac312d] text-white text-sm font-bold disabled:opacity-60"
+                  >
+                    {deleteModal.verifying ? "Verifying..." : "Delete"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </section>
     </AdminLayout>
   );
