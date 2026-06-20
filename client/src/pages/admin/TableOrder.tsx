@@ -4,6 +4,14 @@ import { TableBill } from "@/components/TableBill";
 import { useAuth } from "@/lib/auth";
 import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
+import {
+  computeDiscountPreview,
+  createDiscountHolderDraft,
+  type DiscountHolderDraft,
+  type DiscountPreviewLine,
+  type DiscountableBillItem,
+  type HolderType,
+} from "@/lib/discountAllocations";
 import { menuData } from "@/lib/menuData";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { TABLES, getTable, type TableDef } from "@/lib/tables";
@@ -46,6 +54,8 @@ interface RoundItemRow {
 
 interface RoundWithItems {
   id: string;
+  order_id: string;
+  round_no?: number | string | null;
   order_number: string;
   or_number: string | null;
   created_at: string;
@@ -64,8 +74,33 @@ interface PlaceTableRoundRow {
   order_id: string;
   order_number: string;
   or_number: string | null;
+  round_id: string;
   vatable_sales: number | string;
   vat_amount: number | string;
+}
+
+interface OpenTableOrderRow {
+  id: string;
+  order_number: string;
+  or_number: string | null;
+  created_at: string;
+  subtotal?: number | string | null;
+  total_amount?: number | string | null;
+}
+
+interface OrderRoundRow {
+  id: string;
+  order_id: string;
+  round_no: number | string | null;
+  created_at: string;
+  subtotal: number | string | null;
+  status: string;
+  notes: string | null;
+  kitchen_ticket_printed_at?: string | null;
+  kitchen_ticket_print_count?: number | string | null;
+  bar_ticket_printed_at?: string | null;
+  bar_ticket_print_count?: number | string | null;
+  order_items?: RoundItemRow[] | null;
 }
 
 interface TicketPayload {
@@ -83,9 +118,6 @@ interface TicketPayload {
 interface CloseFormState {
   paymentMethod: PaymentMethod;
   cashReceived: string;
-  senior: boolean;
-  seniorId: string;
-  seniorName: string;
 }
 
 interface BillRound {
@@ -96,13 +128,38 @@ interface BillRound {
   items: Array<{ item_name: string; quantity: number; unit_price: number; line_total: number }>;
 }
 
+type BillDiscountLine = DiscountPreviewLine;
+
+interface CloseTableBillDiscountResponse {
+  holder_ref?: string | null;
+  holder_type?: HolderType | string | null;
+  holder_name?: string | null;
+  holder_id_number?: string | null;
+  discount_rate?: number | string | null;
+  order_id?: string | null;
+  order_number?: string | null;
+  order_item_id?: string | null;
+  item_id?: string | null;
+  item_name?: string | null;
+  unit_price?: number | string | null;
+  quantity?: number | string | null;
+  gross_amount?: number | string | null;
+  vat_removed_amount?: number | string | null;
+  vat_exempt_sales?: number | string | null;
+  discount_amount?: number | string | null;
+  net_amount?: number | string | null;
+}
+
 interface CloseTableBillResponse {
+  bill_group_id?: string;
   table_number?: string;
   rounds?: BillRound[];
   round_count?: number | string;
   or_first?: string | null;
   or_last?: string | null;
   subtotal?: number | string;
+  discount_gross?: number | string;
+  vat_removed_amount?: number | string;
   senior_discount?: number | string;
   vatable_sales?: number | string;
   vat_amount?: number | string;
@@ -114,12 +171,15 @@ interface CloseTableBillResponse {
   senior_pwd?: boolean;
   senior_pwd_id?: string | null;
   senior_pwd_name?: string | null;
+  discounts?: CloseTableBillDiscountResponse[];
 }
 
 interface BillPayload {
   table: TableDef;
   rounds: BillRound[];
   subtotal: number;
+  discountGross: number;
+  vatRemovedAmount: number;
   vatableSales: number;
   vatAmount: number;
   vatExemptSales: number;
@@ -131,10 +191,10 @@ interface BillPayload {
   seniorPwd: boolean;
   seniorPwdId?: string | null;
   seniorPwdName?: string | null;
+  discounts: BillDiscountLine[];
   settings: BusinessSettings;
   isFinal: boolean;
 }
-
 const WAITER_OPTIONS = ["Anfernee", "Angeline", "Bell", "Carin", "Kikay", "Sadam", "Melinda", "Shy"];
 const WAITER_NOTE_PREFIX = "[waiter:";
 const PRINT_NOTE_PREFIX = "[printed:";
@@ -296,10 +356,34 @@ function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSett
       }))
     : [];
 
+  const discounts: BillDiscountLine[] = Array.isArray(raw.discounts)
+    ? raw.discounts.map((line) => ({
+        holderRef: String(line.holder_ref ?? ""),
+        holderType: line.holder_type === "pwd" ? "pwd" : "senior",
+        holderName: String(line.holder_name ?? ""),
+        holderIdNumber: String(line.holder_id_number ?? ""),
+        discountRate: Number(line.discount_rate ?? 0),
+        orderId: String(line.order_id ?? ""),
+        orderNumber: String(line.order_number ?? ""),
+        orderItemId: String(line.order_item_id ?? ""),
+        itemId: String(line.item_id ?? ""),
+        itemName: String(line.item_name ?? ""),
+        unitPrice: Number(line.unit_price ?? 0),
+        quantity: Number(line.quantity ?? 0),
+        grossAmount: Number(line.gross_amount ?? 0),
+        vatRemovedAmount: Number(line.vat_removed_amount ?? 0),
+        vatExemptSales: Number(line.vat_exempt_sales ?? 0),
+        discountAmount: Number(line.discount_amount ?? 0),
+        netAmount: Number(line.net_amount ?? 0),
+      }))
+    : [];
+
   return {
     table,
     rounds,
     subtotal: Number(raw.subtotal ?? 0),
+    discountGross: Number(raw.discount_gross ?? 0),
+    vatRemovedAmount: Number(raw.vat_removed_amount ?? 0),
     vatableSales: Number(raw.vatable_sales ?? 0),
     vatAmount: Number(raw.vat_amount ?? 0),
     vatExemptSales: Number(raw.vat_exempt_sales ?? 0),
@@ -308,14 +392,14 @@ function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSett
     paymentMethod: String(raw.payment_method ?? ""),
     amountReceived: Number(raw.amount_received ?? 0),
     change: Number(raw.change ?? 0),
-    seniorPwd: Boolean(raw.senior_pwd),
+    seniorPwd: Boolean(raw.senior_pwd) || discounts.length > 0,
     seniorPwdId: raw.senior_pwd_id ?? null,
     seniorPwdName: raw.senior_pwd_name ?? null,
+    discounts,
     settings,
     isFinal: true,
   };
 }
-
 export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [, navigate] = useLocation();
   const table = useMemo(() => getTable(tableId), [tableId]);
@@ -333,6 +417,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [waiterName, setWaiterName] = useState("");
   const [showWaiterModal, setShowWaiterModal] = useState(false);
   const [openRounds, setOpenRounds] = useState<RoundWithItems[]>([]);
+  const [openOrder, setOpenOrder] = useState<OpenTableOrderRow | null>(null);
   const [roundsLoading, setRoundsLoading] = useState(true);
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const [submittingRound, setSubmittingRound] = useState(false);
@@ -344,14 +429,13 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [billingOut, setBillingOut] = useState(false);
   const [hasBilledOut, setHasBilledOut] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [showBillOutModal, setShowBillOutModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeForm, setCloseForm] = useState<CloseFormState>({
     paymentMethod: "cash",
     cashReceived: "",
-    senior: false,
-    seniorId: "",
-    seniorName: "",
   });
+  const [discountHolders, setDiscountHolders] = useState<DiscountHolderDraft[]>([]);
   const [printingBill, setPrintingBill] = useState<BillPayload | null>(null);
   const [cancelRound, setCancelRound] = useState<RoundWithItems | null>(null);
   const [cancelReason, setCancelReason] = useState("Cancelled by staff");
@@ -421,6 +505,24 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     [openRounds],
   );
 
+  const discountableBillItems = useMemo<DiscountableBillItem[]>(
+    () =>
+      openRounds
+        .flatMap((round) =>
+          (round.order_items ?? []).map((item) => ({
+            orderId: round.order_id,
+            orderNumber: round.order_number,
+            orderItemId: item.id ? String(item.id) : "",
+            itemId: String(item.item_id ?? ""),
+            itemName: String(item.item_name ?? ""),
+            unitPrice: Number(item.unit_price ?? 0),
+            quantity: Number(item.quantity ?? 0),
+          })),
+        )
+        .filter((item) => item.orderItemId && item.quantity > 0),
+    [openRounds],
+  );
+
   const openSince = openRounds.length
     ? openRounds.reduce((earliest, round) =>
         new Date(round.created_at).getTime() < new Date(earliest).getTime() ? round.created_at : earliest,
@@ -428,21 +530,32 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     : null;
 
   const billPreview = useMemo(() => {
-    const seniorDiscount = closeForm.senior ? round2(runningSubtotal * 0.2) : 0;
-    const total = closeForm.senior ? round2(runningSubtotal - seniorDiscount) : runningSubtotal;
-    const amountReceived = closeForm.paymentMethod === "cash" ? Number(closeForm.cashReceived || 0) : total;
+    const preview = computeDiscountPreview(
+      discountableBillItems,
+      discountHolders,
+      runningSubtotal,
+      Boolean(resolvedSettings.vat_registered),
+      Number(resolvedSettings.vat_rate ?? 12),
+    );
+    const amountReceived = closeForm.paymentMethod === "cash" ? Number(closeForm.cashReceived || 0) : preview.total;
     return {
-      seniorDiscount,
-      total,
+      ...preview,
       amountReceived,
-      change: Math.max(0, round2(amountReceived - total)),
+      change: Math.max(0, round2(amountReceived - preview.total)),
     };
-  }, [closeForm.cashReceived, closeForm.paymentMethod, closeForm.senior, runningSubtotal]);
-
-  const roundManagementDisabled = hasBilledOut || showCloseModal || closing;
+  }, [
+    closeForm.cashReceived,
+    closeForm.paymentMethod,
+    discountHolders,
+    discountableBillItems,
+    resolvedSettings.vat_rate,
+    resolvedSettings.vat_registered,
+    runningSubtotal,
+  ]);
+  const roundManagementDisabled = hasBilledOut || showBillOutModal || showCloseModal || billingOut || closing;
   const roundManagementTitle = hasBilledOut
     ? "This table has already been billed out"
-    : showCloseModal || closing
+    : showBillOutModal || showCloseModal || billingOut || closing
       ? "Close and bill is in progress"
       : undefined;
 
@@ -456,6 +569,272 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     }));
   }
 
+  function buildBillRounds(): BillRound[] {
+    return openRounds.map((round) => ({
+      order_number: openOrder?.order_number ?? round.order_number,
+      or_number: openOrder?.or_number ?? round.or_number ?? "",
+      created_at: round.created_at,
+      subtotal: roundSubtotal(round),
+      items: (round.order_items ?? []).map((item) => ({
+        item_name: String(item.item_name ?? ""),
+        quantity: Number(item.quantity ?? 0),
+        unit_price: Number(item.unit_price ?? 0),
+        line_total: Number(item.line_total ?? 0),
+      })),
+    }));
+  }
+
+  function buildBillPayload(isFinal: boolean, paymentMethod = "", amountReceived = 0, change = 0): BillPayload {
+    if (!table) throw new Error("Table is required");
+    return {
+      table,
+      rounds: buildBillRounds(),
+      subtotal: runningSubtotal,
+      discountGross: billPreview.discountGross,
+      vatRemovedAmount: billPreview.vatRemovedAmount,
+      vatableSales: billPreview.vatableSales,
+      vatAmount: billPreview.vatAmount,
+      vatExemptSales: billPreview.vatExemptSales,
+      seniorDiscount: billPreview.discountAmount,
+      total: billPreview.total,
+      paymentMethod,
+      amountReceived,
+      change,
+      seniorPwd: billPreview.lines.length > 0,
+      seniorPwdId: Array.from(new Set(billPreview.lines.map((line) => line.holderIdNumber).filter(Boolean))).join(", ") || null,
+      seniorPwdName: Array.from(new Set(billPreview.lines.map((line) => line.holderName).filter(Boolean))).join(", ") || null,
+      discounts: billPreview.lines,
+      settings: resolvedSettings,
+      isFinal,
+    };
+  }
+
+  function buildDiscountAllocationPayload() {
+    return billPreview.lines.map((line) => ({
+      holder_ref: line.holderRef,
+      holder_type: line.holderType,
+      holder_name: line.holderName,
+      holder_id_number: line.holderIdNumber,
+      discount_rate: line.discountRate,
+      order_item_id: line.orderItemId,
+      quantity: line.quantity,
+    }));
+  }
+
+  function addDiscountHolder() {
+    setDiscountHolders((current) => [...current, createDiscountHolderDraft()]);
+  }
+
+  function updateDiscountHolder(
+    holderId: string,
+    patch: Partial<Pick<DiscountHolderDraft, "holderType" | "holderName" | "holderIdNumber" | "discountRate">>,
+  ) {
+    setDiscountHolders((current) => current.map((holder) => (holder.id === holderId ? { ...holder, ...patch } : holder)));
+  }
+
+  function removeDiscountHolder(holderId: string) {
+    setDiscountHolders((current) => current.filter((holder) => holder.id !== holderId));
+  }
+
+  function updateDiscountAllocation(holderId: string, orderItemId: string, value: string) {
+    setDiscountHolders((current) =>
+      current.map((holder) => {
+        if (holder.id !== holderId) return holder;
+        const allocations = { ...holder.allocations };
+        if (!value || Number(value) <= 0) {
+          delete allocations[orderItemId];
+        } else {
+          allocations[orderItemId] = value;
+        }
+        return { ...holder, allocations };
+      }),
+    );
+  }
+  function renderDiscountPanel() {
+    return (
+      <div className="rounded-lg border border-[#d8d2cb] p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-bold text-[#0d0f13]">Senior/PWD IDs</p>
+            <p className="text-xs font-semibold text-[#705d48]">Item-level discounts</p>
+          </div>
+          <button
+            type="button"
+            onClick={addDiscountHolder}
+            className="inline-flex h-9 items-center justify-center rounded-lg bg-[#0d0f13] px-3 text-xs font-bold uppercase tracking-wide text-white"
+          >
+            Add ID
+          </button>
+        </div>
+
+        {discountHolders.length === 0 ? (
+          <p className="mt-3 rounded-lg bg-[#f6f2ed] px-3 py-2 text-sm font-semibold text-[#705d48]">
+            No Senior/PWD IDs applied.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {discountHolders.map((holder, holderIndex) => (
+              <div key={holder.id} className="rounded-lg border border-[#d8d2cb] bg-[#fbfaf8] p-3">
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <p className="text-sm font-bold text-[#0d0f13]">ID Holder {holderIndex + 1}</p>
+                  <button
+                    type="button"
+                    onClick={() => removeDiscountHolder(holder.id)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#d8d2cb] text-[#ac312d]"
+                    title="Remove ID holder"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)_minmax(0,1fr)_100px]">
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-[#705d48]">Type</label>
+                    <select
+                      value={holder.holderType}
+                      onChange={(event) => updateDiscountHolder(holder.id, { holderType: event.target.value as HolderType })}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#d8d2cb] bg-white px-2 text-sm font-semibold"
+                    >
+                      <option value="senior">Senior</option>
+                      <option value="pwd">PWD</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-[#705d48]">Name</label>
+                    <input
+                      type="text"
+                      value={holder.holderName}
+                      onChange={(event) => updateDiscountHolder(holder.id, { holderName: event.target.value })}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#d8d2cb] px-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-[#705d48]">ID Number</label>
+                    <input
+                      type="text"
+                      value={holder.holderIdNumber}
+                      onChange={(event) => updateDiscountHolder(holder.id, { holderIdNumber: event.target.value })}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#d8d2cb] px-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-[#705d48]">Rate %</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={holder.discountRate}
+                      onChange={(event) => updateDiscountHolder(holder.id, { discountRate: event.target.value })}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#d8d2cb] px-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+                  {discountableBillItems.map((item) => (
+                    <div
+                      key={`${holder.id}-${item.orderItemId}`}
+                      className="grid grid-cols-[minmax(0,1fr)_92px] items-center gap-2 rounded-md bg-white px-2 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[#0d0f13]">{item.itemName}</p>
+                        <p className="text-xs text-[#705d48]">
+                          {currencyPhp(item.unitPrice)} | max {item.quantity}
+                        </p>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        max={item.quantity}
+                        step="1"
+                        value={holder.allocations[item.orderItemId] ?? ""}
+                        onChange={(event) => updateDiscountAllocation(holder.id, item.orderItemId, event.target.value)}
+                        className="h-9 w-full rounded-lg border border-[#d8d2cb] px-2 text-right text-sm font-semibold"
+                        aria-label={`Discount quantity for ${item.itemName}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {billPreview.errors.length > 0 && (
+          <div className="mt-3 space-y-1 rounded-lg border border-[#ac312d]/30 bg-[#ac312d]/5 p-2">
+            {billPreview.errors.map((previewError) => (
+              <p key={previewError} className="text-xs font-semibold text-[#ac312d]">
+                {previewError}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderBillSummary(includePayment: boolean) {
+    return (
+      <div className="rounded-lg border border-[#d8d2cb] p-3 text-sm">
+        <div className="flex justify-between gap-3">
+          <span className="text-[#705d48]">Subtotal</span>
+          <span className="font-semibold">{currencyPhp(runningSubtotal)}</span>
+        </div>
+        {billPreview.discountGross > 0 && (
+          <div className="flex justify-between gap-3">
+            <span className="text-[#705d48]">Discounted Item Gross</span>
+            <span className="font-semibold">{currencyPhp(billPreview.discountGross)}</span>
+          </div>
+        )}
+        {billPreview.vatRemovedAmount > 0 && (
+          <div className="flex justify-between gap-3">
+            <span className="text-[#705d48]">VAT Removed</span>
+            <span className="font-semibold text-[#2d7a3e]">-{currencyPhp(billPreview.vatRemovedAmount)}</span>
+          </div>
+        )}
+        {billPreview.discountAmount > 0 && (
+          <div className="flex justify-between gap-3">
+            <span className="text-[#705d48]">Senior/PWD Discount</span>
+            <span className="font-semibold text-[#2d7a3e]">-{currencyPhp(billPreview.discountAmount)}</span>
+          </div>
+        )}
+        {billPreview.vatExemptSales > 0 && (
+          <div className="flex justify-between gap-3">
+            <span className="text-[#705d48]">VAT-Exempt Sales</span>
+            <span className="font-semibold">{currencyPhp(billPreview.vatExemptSales)}</span>
+          </div>
+        )}
+        {resolvedSettings.vat_registered && (
+          <>
+            <div className="flex justify-between gap-3">
+              <span className="text-[#705d48]">VAT-able Sales</span>
+              <span className="font-semibold">{currencyPhp(billPreview.vatableSales)}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-[#705d48]">VAT</span>
+              <span className="font-semibold">{currencyPhp(billPreview.vatAmount)}</span>
+            </div>
+          </>
+        )}
+        <div className="mt-2 flex justify-between gap-3 text-base">
+          <span className="font-bold uppercase tracking-wide text-[#705d48]">Total</span>
+          <span className="font-bold text-[#ac312d]">{currencyPhp(billPreview.total)}</span>
+        </div>
+        {includePayment && (
+          <>
+            <div className="flex justify-between gap-3">
+              <span className="text-[#705d48]">Payment</span>
+              <span className="font-semibold">{currencyPhp(billPreview.amountReceived)}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-[#705d48]">Change</span>
+              <span className="font-semibold">{currencyPhp(billPreview.change)}</span>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
   function cartItemsFromRound(round: RoundWithItems): TableCartItem[] {
     return (round.order_items ?? [])
       .map((item, index) => {
@@ -482,21 +861,67 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   async function loadRounds() {
     if (!table) return;
     setError(null);
-    const { data, error: loadError } = await supabase
+    const { data: orderData, error: orderError } = await supabase
       .from("orders")
-      .select("*, order_items(*)")
+      .select("id, order_number, or_number, created_at, subtotal, total_amount")
       .eq("table_number", table.id)
-      .in("status", ["preparing", "ready"]);
+      .in("status", ["preparing", "ready"])
+      .order("created_at", { ascending: true })
+      .limit(1);
 
-    if (loadError) {
-      setError(loadError.message);
+    if (orderError) {
+      setError(orderError.message);
+      setOpenOrder(null);
       setOpenRounds([]);
-    } else {
-      const rows = ((data ?? []) as RoundWithItems[]).sort(
-        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-      );
-      setOpenRounds(rows);
+      setRoundsLoading(false);
+      return;
     }
+
+    const orderRow = ((orderData ?? []) as OpenTableOrderRow[])[0] ?? null;
+    setOpenOrder(orderRow);
+    if (!orderRow) {
+      setOpenRounds([]);
+      setRoundsLoading(false);
+      return;
+    }
+
+    const { data: roundData, error: roundError } = await supabase
+      .from("order_rounds")
+      .select("*, order_items(*)")
+      .eq("order_id", orderRow.id)
+      .eq("status", "active")
+      .order("round_no", { ascending: true });
+
+    if (roundError) {
+      setError(roundError.message);
+      setOpenRounds([]);
+      setRoundsLoading(false);
+      return;
+    }
+
+    const rows = ((roundData ?? []) as OrderRoundRow[])
+      .map((round) => ({
+        id: round.id,
+        order_id: orderRow.id,
+        round_no: round.round_no,
+        order_number: orderRow.order_number,
+        or_number: orderRow.or_number,
+        created_at: round.created_at,
+        subtotal: round.subtotal,
+        total_amount: round.subtotal,
+        status: round.status,
+        notes: round.notes,
+        kitchen_ticket_printed_at: round.kitchen_ticket_printed_at,
+        kitchen_ticket_print_count: round.kitchen_ticket_print_count,
+        bar_ticket_printed_at: round.bar_ticket_printed_at,
+        bar_ticket_print_count: round.bar_ticket_print_count,
+        order_items: round.order_items ?? [],
+      }))
+      .sort((a, b) => {
+        const byRound = Number(a.round_no ?? 0) - Number(b.round_no ?? 0);
+        return byRound || new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+    setOpenRounds(rows);
     setRoundsLoading(false);
   }
 
@@ -507,6 +932,9 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     const channel = supabase
       .channel(`table-rounds-${table.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `table_number=eq.${table.id}` }, () => {
+        void loadRounds();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_rounds" }, () => {
         void loadRounds();
       })
       .subscribe();
@@ -684,16 +1112,18 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
     const rows = Array.isArray(data) ? (data as PlaceTableRoundRow[]) : data ? [data as PlaceTableRoundRow] : [];
     const row = rows[0];
-    if (!row?.order_number) {
-      setError("Table round was saved but order number was not returned.");
+    if (!row?.order_number || !row?.round_id) {
+      setError("Table round was saved but round details were not returned.");
       setSubmittingRound(false);
       return;
     }
 
     setOrderItems([]);
     setNotes("");
+    setExpandedRounds((current) => new Set(current).add(row.round_id));
     setSubmittingRound(false);
     setHasBilledOut(false);
+    setDiscountHolders([]);
     await loadRounds();
   }
 
@@ -727,7 +1157,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setError(null);
 
     const { error: rpcError } = await supabase.rpc("update_table_round_items", {
-      p_order_id: round.id,
+      p_round_id: round.id,
       p_items: buildOrderItemPayload(),
     });
 
@@ -742,6 +1172,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setNotes("");
     setSubmittingRound(false);
     setHasBilledOut(false);
+    setDiscountHolders([]);
     await loadRounds();
   }
 
@@ -777,7 +1208,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setError(null);
 
     const { error: rpcError } = await supabase.rpc("cancel_table_round", {
-      p_order_id: cancelRound.id,
+      p_round_id: cancelRound.id,
       p_reason: cancelReason.trim() || "Cancelled by staff",
     });
 
@@ -804,11 +1235,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
 
   function beginMoveRound(round: RoundWithItems) {
     if (!canManageBilling) {
-      setError("Only the cashier can move this round.");
+      setError("Only the cashier can move this table order.");
       return;
     }
     if (roundManagementDisabled) {
-      setError(roundManagementTitle ?? "This round cannot be moved now.");
+      setError(roundManagementTitle ?? "This table order cannot be moved now.");
       return;
     }
 
@@ -820,11 +1251,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   async function handleConfirmMoveRound() {
     if (!moveRound || !selectedMoveTable || movingRoundId) return;
     if (!canManageBilling) {
-      setError("Only the cashier can move this round.");
+      setError("Only the cashier can move this table order.");
       return;
     }
     if (roundManagementDisabled) {
-      setError(roundManagementTitle ?? "This round cannot be moved now.");
+      setError(roundManagementTitle ?? "This table order cannot be moved now.");
       return;
     }
 
@@ -832,7 +1263,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setError(null);
 
     const { error: rpcError } = await supabase.rpc("transfer_table_round", {
-      p_order_id: moveRound.id,
+      p_round_id: moveRound.id,
       p_new_table_number: selectedMoveTable,
     });
 
@@ -881,9 +1312,10 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     });
   }, [openRounds]);
 
-  async function handleBillOut() {
+  function openBillOutModal() {
     if (!table || !openRounds.length || billingOut) return;
     setError(null);
+    setCloseError(null);
     if (!canManageBilling) {
       setError("Only the cashier can bill out this table.");
       return;
@@ -896,51 +1328,36 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       setError("This table has already been billed out. Settle it to close.");
       return;
     }
+    setShowBillOutModal(true);
+  }
+
+  async function handleBillOut() {
+    if (!table || !openRounds.length || billingOut) return;
+    setError(null);
+    setCloseError(null);
+    if (!canManageBilling) {
+      setError("Only the cashier can bill out this table.");
+      return;
+    }
+    if (!allRequiredTicketsPrinted) {
+      setError("Print all kitchen and bar tickets before bill out.");
+      return;
+    }
+    if (hasBilledOut) {
+      setError("This table has already been billed out. Settle it to close.");
+      return;
+    }
+    if (billPreview.errors.length > 0) {
+      setCloseError(billPreview.errors[0]);
+      return;
+    }
     setBillingOut(true);
-
-    const rounds: BillRound[] = openRounds.map((round) => ({
-      order_number: round.order_number,
-      or_number: round.or_number ?? "",
-      created_at: round.created_at,
-      subtotal: roundSubtotal(round),
-      items: (round.order_items ?? []).map((item) => ({
-        item_name: String(item.item_name ?? ""),
-        quantity: Number(item.quantity ?? 0),
-        unit_price: Number(item.unit_price ?? 0),
-        line_total: Number(item.line_total ?? 0),
-      })),
-    }));
-
-    const subtotal = runningSubtotal;
-    const vatRegistered = resolvedSettings.vat_registered;
-    const vatAmount = vatRegistered
-      ? round2((subtotal * resolvedSettings.vat_rate) / (100 + resolvedSettings.vat_rate))
-      : 0;
-    const vatableSales = vatRegistered ? round2(subtotal - vatAmount) : 0;
-
-    setPrintingBill({
-      table,
-      rounds,
-      subtotal,
-      vatableSales,
-      vatAmount,
-      vatExemptSales: 0,
-      seniorDiscount: 0,
-      total: subtotal,
-      paymentMethod: "",
-      amountReceived: 0,
-      change: 0,
-      seniorPwd: false,
-      seniorPwdId: null,
-      seniorPwdName: null,
-      settings: resolvedSettings,
-      isFinal: false,
-    });
+    setPrintingBill(buildBillPayload(false));
+    setShowBillOutModal(false);
     setBillingOut(false);
     setHasBilledOut(true);
     await loadRounds();
   }
-
   async function handleConfirmCloseBill() {
     if (!table || closing) return;
     setCloseError(null);
@@ -965,6 +1382,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       return;
     }
 
+    if (billPreview.errors.length > 0) {
+      setCloseError(billPreview.errors[0]);
+      return;
+    }
+
     if (closeForm.paymentMethod === "cash" && Number(closeForm.cashReceived || 0) < billPreview.total) {
       setCloseError("Cash received is less than the total.");
       return;
@@ -976,9 +1398,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       p_table_number: table.id,
       p_payment_method: closeForm.paymentMethod,
       p_amount_received: amountReceived,
-      p_senior_pwd: closeForm.senior,
-      p_senior_pwd_id: closeForm.senior ? closeForm.seniorId.trim() || null : null,
-      p_senior_pwd_name: closeForm.senior ? closeForm.seniorName.trim() || null : null,
+      p_discount_allocations: buildDiscountAllocationPayload(),
     });
 
     if (rpcError) {
@@ -1134,7 +1554,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 <button
                   type="button"
-                  onClick={handleBillOut}
+                  onClick={openBillOutModal}
                   disabled={!openRounds.length || roundsLoading || settingsLoading || billingOut || !allRequiredTicketsPrinted || hasBilledOut}
                   title={
                     hasBilledOut
@@ -1436,12 +1856,61 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
             </div>
           </div>
         )}
-        {showCloseModal && (
+        {showBillOutModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
-            <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-bold text-[#0d0f13]">Close & Bill</h2>
+                  <h2 className="text-xl font-bold text-[#0d0f13]">Bill Out</h2>
+                  <p className="mt-1 text-sm text-[#705d48]">
+                    Table {table.number} | {openRounds.length} rounds | {currencyPhp(runningSubtotal)} subtotal
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowBillOutModal(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#d8d2cb] text-[#0d0f13]"
+                  title="Close modal"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                {renderDiscountPanel()}
+                {renderBillSummary(false)}
+
+                {closeError && <p className="text-sm font-semibold text-[#ac312d]">{closeError}</p>}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleBillOut}
+                    disabled={billingOut || billPreview.errors.length > 0}
+                    className="h-11 rounded-lg bg-[#ac312d] text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50"
+                  >
+                    {billingOut ? "Printing..." : "Print Billout"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBillOutModal(false)}
+                    disabled={billingOut}
+                    className="h-11 rounded-lg border border-[#0d0f13] text-sm font-semibold uppercase tracking-wide text-[#0d0f13] disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCloseModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-[#0d0f13]">Settle & Close</h2>
                   <p className="mt-1 text-sm text-[#705d48]">
                     Table {table.number} | {openRounds.length} rounds | {currencyPhp(runningSubtotal)} subtotal
                   </p>
@@ -1498,65 +1967,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   </div>
                 )}
 
-                <label className="flex items-center gap-2 text-sm font-semibold text-[#0d0f13]">
-                  <input
-                    type="checkbox"
-                    checked={closeForm.senior}
-                    onChange={(event) => setCloseForm((current) => ({ ...current, senior: event.target.checked }))}
-                    className="h-4 w-4"
-                  />
-                  Senior/PWD discount
-                </label>
-
-                {closeForm.senior && (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">ID Number</label>
-                      <input
-                        type="text"
-                        value={closeForm.seniorId}
-                        onChange={(event) => setCloseForm((current) => ({ ...current, seniorId: event.target.value }))}
-                        className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2 text-sm"
-                        placeholder="Optional"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Full Name</label>
-                      <input
-                        type="text"
-                        value={closeForm.seniorName}
-                        onChange={(event) => setCloseForm((current) => ({ ...current, seniorName: event.target.value }))}
-                        className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2 text-sm"
-                        placeholder="Optional"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="rounded-lg border border-[#d8d2cb] p-3 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-[#705d48]">Subtotal</span>
-                    <span className="font-semibold">{currencyPhp(runningSubtotal)}</span>
-                  </div>
-                  {closeForm.senior && (
-                    <div className="flex justify-between gap-3">
-                      <span className="text-[#705d48]">Senior/PWD (-20%)</span>
-                      <span className="font-semibold text-[#2d7a3e]">-{currencyPhp(billPreview.seniorDiscount)}</span>
-                    </div>
-                  )}
-                  <div className="mt-2 flex justify-between gap-3 text-base">
-                    <span className="font-bold uppercase tracking-wide text-[#705d48]">Total</span>
-                    <span className="font-bold text-[#ac312d]">{currencyPhp(billPreview.total)}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-[#705d48]">Payment</span>
-                    <span className="font-semibold">{currencyPhp(billPreview.amountReceived)}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-[#705d48]">Change</span>
-                    <span className="font-semibold">{currencyPhp(billPreview.change)}</span>
-                  </div>
-                </div>
+                {renderDiscountPanel()}
+                {renderBillSummary(true)}
 
                 {closeError && <p className="text-sm font-semibold text-[#ac312d]">{closeError}</p>}
 
@@ -1564,7 +1976,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   <button
                     type="button"
                     onClick={handleConfirmCloseBill}
-                    disabled={closing}
+                    disabled={closing || billPreview.errors.length > 0}
                     className="h-11 rounded-lg bg-[#ac312d] text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50"
                   >
                     {closing ? "Closing..." : "Confirm & Print"}
@@ -1582,7 +1994,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
             </div>
           </div>
         )}
-
         {cancelRound && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
             <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
@@ -1656,6 +2067,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   <p className="mt-1 text-sm text-[#705d48]">
                     {moveRound.order_number} | From Table {table.number}
                   </p>
+                  <p className="mt-1 text-sm text-[#705d48]">This moves the entire table order.</p>
                 </div>
                 <button
                   type="button"
@@ -1758,6 +2170,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               table={printingBill.table}
               rounds={printingBill.rounds}
               subtotal={printingBill.subtotal}
+              discountGross={printingBill.discountGross}
+              vatRemovedAmount={printingBill.vatRemovedAmount}
               vatableSales={printingBill.vatableSales}
               vatAmount={printingBill.vatAmount}
               vatExemptSales={printingBill.vatExemptSales}
@@ -1769,6 +2183,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               seniorPwd={printingBill.seniorPwd}
               seniorPwdId={printingBill.seniorPwdId}
               seniorPwdName={printingBill.seniorPwdName}
+              discounts={printingBill.discounts}
               settings={printingBill.settings}
               cashierName={cashierName}
               isFinal={printingBill.isFinal}

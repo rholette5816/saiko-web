@@ -1,6 +1,30 @@
 import type { BusinessSettings } from "@/lib/supabase";
 import type { TableDef } from "@/lib/tables";
 
+interface BillDiscountLine {
+  holderRef?: string;
+  holderType?: "senior" | "pwd" | string;
+  holderName?: string;
+  holderIdNumber?: string;
+  discountRate?: number;
+  itemName?: string;
+  quantity?: number;
+  grossAmount?: number;
+  vatRemovedAmount?: number;
+  vatExemptSales?: number;
+  discountAmount?: number;
+  netAmount?: number;
+}
+
+interface DiscountHolderSummary {
+  key: string;
+  holderType: string;
+  holderName: string;
+  holderIdNumber: string;
+  discountRate: number;
+  items: Array<{ itemName: string; quantity: number }>;
+}
+
 interface TableBillProps {
   table: TableDef;
   rounds: Array<{
@@ -11,6 +35,8 @@ interface TableBillProps {
     items: Array<{ item_name: string; quantity: number; unit_price: number; line_total: number }>;
   }>;
   subtotal: number;
+  discountGross?: number;
+  vatRemovedAmount?: number;
   vatableSales: number;
   vatAmount: number;
   vatExemptSales: number;
@@ -22,6 +48,7 @@ interface TableBillProps {
   seniorPwd: boolean;
   seniorPwdId?: string | null;
   seniorPwdName?: string | null;
+  discounts?: BillDiscountLine[];
   settings: BusinessSettings;
   cashierName?: string | null;
   isFinal: boolean;
@@ -70,9 +97,10 @@ function formatReceiptTime(value: Date | string) {
 }
 
 function rangeLabel(values: string[]) {
-  if (!values.length) return "N/A";
-  if (values.length === 1) return values[0];
-  return `${values[0]} to ${values[values.length - 1]}`;
+  const uniqueValues = Array.from(new Set(values.filter(Boolean)));
+  if (!uniqueValues.length) return "N/A";
+  if (uniqueValues.length === 1) return uniqueValues[0];
+  return `${uniqueValues[0]} to ${uniqueValues[uniqueValues.length - 1]}`;
 }
 
 function combineItems(rounds: TableBillProps["rounds"]): CombinedBillItem[] {
@@ -96,6 +124,38 @@ function combineItems(rounds: TableBillProps["rounds"]): CombinedBillItem[] {
   return Array.from(itemsByKey.values());
 }
 
+function formatPercent(value: number): string {
+  return Number(value || 0).toLocaleString("en-PH", { maximumFractionDigits: 2 });
+}
+
+function discountTypeLabel(value: string): string {
+  return value.toLowerCase() === "pwd" ? "PWD" : "Senior";
+}
+
+function groupDiscounts(discounts: BillDiscountLine[]): DiscountHolderSummary[] {
+  const grouped = new Map<string, DiscountHolderSummary>();
+
+  discounts.forEach((line, index) => {
+    const holderType = String(line.holderType || "senior");
+    const holderName = String(line.holderName || "");
+    const holderIdNumber = String(line.holderIdNumber || "");
+    const discountRate = Number(line.discountRate || 0);
+    const key = line.holderRef || `${holderType}-${holderIdNumber}-${holderName}-${discountRate}-${index}`;
+    const current = grouped.get(key) ?? {
+      key,
+      holderType,
+      holderName,
+      holderIdNumber,
+      discountRate,
+      items: [],
+    };
+
+    current.items.push({ itemName: String(line.itemName || "Item"), quantity: Number(line.quantity || 0) });
+    grouped.set(key, current);
+  });
+
+  return Array.from(grouped.values());
+}
 export function TableBill(props: TableBillProps) {
   const printedAt = new Date();
   const businessName = props.settings.business_name || "SAIKO RAMEN & SUSHI";
@@ -109,6 +169,9 @@ export function TableBill(props: TableBillProps) {
   const paymentType = props.paymentMethod || "cash";
   const combinedItems = combineItems(props.rounds);
   const itemCount = combinedItems.reduce((total, item) => total + item.quantity, 0);
+  const discountLines = props.discounts ?? [];
+  const discountHolders = groupDiscounts(discountLines);
+  const hasDiscounts = discountLines.length > 0 || props.seniorPwd;
 
   return (
     <div className="table-bill">
@@ -229,19 +292,31 @@ export function TableBill(props: TableBillProps) {
         <span>Subtotal:</span>
         <span className="value">{money(props.subtotal)}</span>
       </div>
-      {props.seniorPwd && (
-        <>
-          <div className="row">
-            <span>Senior/PWD (-20%)</span>
-            <span className="value">-{money(props.seniorDiscount)}</span>
-          </div>
-          <div className="row">
-            <span>VAT-Exempt Sales</span>
-            <span className="value">{money(props.vatExemptSales)}</span>
-          </div>
-        </>
+      {Number(props.discountGross || 0) > 0 && (
+        <div className="row">
+          <span>Discounted Gross</span>
+          <span className="value">{money(Number(props.discountGross || 0))}</span>
+        </div>
       )}
-      {!props.seniorPwd && props.settings.vat_registered && (
+      {Number(props.vatRemovedAmount || 0) > 0 && (
+        <div className="row">
+          <span>VAT Removed</span>
+          <span className="value">-{money(Number(props.vatRemovedAmount || 0))}</span>
+        </div>
+      )}
+      {hasDiscounts && props.seniorDiscount > 0 && (
+        <div className="row">
+          <span>Senior/PWD Disc.</span>
+          <span className="value">-{money(props.seniorDiscount)}</span>
+        </div>
+      )}
+      {props.vatExemptSales > 0 && (
+        <div className="row">
+          <span>VAT-Exempt Sales</span>
+          <span className="value">{money(props.vatExemptSales)}</span>
+        </div>
+      )}
+      {props.settings.vat_registered && (
         <>
           <div className="row">
             <span>VAT-able Sales</span>
@@ -281,14 +356,34 @@ export function TableBill(props: TableBillProps) {
         </div>
       )}
 
-      {props.seniorPwd && (
+      {hasDiscounts && (
         <>
           <div className="divider">{divider("-")}</div>
-          <div>ID Number: {props.seniorPwdId || "N/A"}</div>
-          <div>Full Name: {props.seniorPwdName || "N/A"}</div>
+          <div className="bold">DISCOUNT DETAILS</div>
+          {discountHolders.length > 0 ? (
+            discountHolders.map((holder) => (
+              <div key={holder.key}>
+                <div>
+                  {discountTypeLabel(holder.holderType)}: {holder.holderName || "N/A"}
+                </div>
+                <div>
+                  ID: {holder.holderIdNumber || "N/A"} | Rate: {formatPercent(holder.discountRate)}%
+                </div>
+                {holder.items.map((item, index) => (
+                  <div key={`${holder.key}-${item.itemName}-${index}`}>
+                    {item.quantity} x {item.itemName}
+                  </div>
+                ))}
+              </div>
+            ))
+          ) : (
+            <>
+              <div>ID Number: {props.seniorPwdId || "N/A"}</div>
+              <div>Full Name: {props.seniorPwdName || "N/A"}</div>
+            </>
+          )}
         </>
       )}
-
       <div className="divider">{divider("-")}</div>
       <div>CUST. NAME: __________________________</div>
       <div>ADDRESS: _____________________________</div>
