@@ -13,13 +13,13 @@ import {
   type HolderType,
 } from "@/lib/discountAllocations";
 import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
+import { paymentMethodOptions, type PaymentMethod } from "@/lib/paymentMethods";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { TABLES, getTable, type TableDef } from "@/lib/tables";
 import { ArrowLeft, ChevronDown, ChevronRight, Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
-type PaymentMethod = "cash" | "gcash" | "card";
 type TicketKind = "kitchen" | "bar";
 
 interface AdminTableOrderProps {
@@ -2108,11 +2108,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                 <div>
                   <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[#705d48]">Payment Method</p>
                   <div className="grid grid-cols-3 gap-2">
-                    {(["cash", "gcash", "card"] as PaymentMethod[]).map((method) => (
+                    {paymentMethodOptions.map((option) => (
                       <label
-                        key={method}
+                        key={option.value}
                         className={`cursor-pointer rounded-lg border px-2 py-2 text-center text-sm font-semibold ${
-                          closeForm.paymentMethod === method
+                          closeForm.paymentMethod === option.value
                             ? "border-[#ac312d] bg-[#ac312d] text-white"
                             : "border-[#d8d2cb] text-[#0d0f13]"
                         }`}
@@ -2121,11 +2121,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                           type="radio"
                           className="sr-only"
                           name="table-payment"
-                          value={method}
-                          checked={closeForm.paymentMethod === method}
-                          onChange={() => setCloseForm((current) => ({ ...current, paymentMethod: method }))}
+                          value={option.value}
+                          checked={closeForm.paymentMethod === option.value}
+                          onChange={() => setCloseForm((current) => ({ ...current, paymentMethod: option.value }))}
                         />
-                        {method.toUpperCase()}
+                        {option.shortLabel}
                       </label>
                     ))}
                   </div>

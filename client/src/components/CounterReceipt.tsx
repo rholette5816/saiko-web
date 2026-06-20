@@ -1,3 +1,4 @@
+import { paymentMethodShortLabel } from "@/lib/paymentMethods";
 import type { BusinessSettings } from "@/lib/supabase";
 
 interface CounterReceiptItem {
@@ -204,7 +205,7 @@ export function CounterReceipt(props: CounterReceiptProps) {
 
       <div className="center divider">{sectionDivider("-")}</div>
       <div className="row">
-        <span className="label">Payment ({props.payment.toUpperCase()}):</span>
+        <span className="label">Payment ({paymentMethodShortLabel(props.payment)}):</span>
         <span className="value">{money(props.received)}</span>
       </div>
       <div className="row">

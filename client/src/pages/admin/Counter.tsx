@@ -5,11 +5,11 @@ import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
 import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
 import { composeOrderTicketNotes, getTicketStatus, parseOrderTicketNotes } from "@/lib/orderTickets";
+import { paymentMethodOptions, paymentMethodShortLabel, type PaymentMethod } from "@/lib/paymentMethods";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type PaymentMethod = "cash" | "gcash" | "card";
 type TicketKind = "kitchen" | "bar";
 type CounterServiceType = "dine-in" | "takeout";
 type DiscountType = "none" | "senior" | "pwd" | "employee" | "friends" | "custom";
@@ -651,11 +651,11 @@ export default function AdminCounter() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[#705d48] mb-1.5">Payment Method</p>
             <div className="grid grid-cols-3 gap-1.5">
-              {(["cash", "gcash", "card"] as PaymentMethod[]).map((method) => (
+              {paymentMethodOptions.map((option) => (
                 <label
-                  key={method}
+                  key={option.value}
                   className={`rounded-lg border px-2 py-2 text-center text-sm font-semibold cursor-pointer ${
-                    paymentMethod === method
+                    paymentMethod === option.value
                       ? "border-[#ac312d] bg-[#ac312d] text-white"
                       : "border-[#d8d2cb] text-[#0d0f13]"
                   }`}
@@ -664,11 +664,11 @@ export default function AdminCounter() {
                     type="radio"
                     className="sr-only"
                     name={`payment-${isMobile ? "mobile" : "desktop"}`}
-                    value={method}
-                    checked={paymentMethod === method}
-                    onChange={() => setPaymentMethod(method)}
+                    value={option.value}
+                    checked={paymentMethod === option.value}
+                    onChange={() => setPaymentMethod(option.value)}
                   />
-                  {method.toUpperCase()}
+                  {option.shortLabel}
                 </label>
               ))}
             </div>
@@ -728,7 +728,7 @@ export default function AdminCounter() {
             <span className="font-bold text-[#ac312d]">{currencyPhp(pricing.total)}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[#705d48]">Payment ({paymentMethod.toUpperCase()})</span>
+            <span className="text-[#705d48]">Payment ({paymentMethodShortLabel(paymentMethod)})</span>
             <span className="font-semibold">{currencyPhp(receivedAmount)}</span>
           </div>
           <div className="flex items-center justify-between">

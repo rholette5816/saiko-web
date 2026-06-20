@@ -16,10 +16,10 @@ import {
   type TableSalesRow,
 } from "@/lib/dataCenter";
 import { getCustomRange } from "@/lib/dateRanges";
+import { PAYMENT_LABEL_ORDER, resolvePaymentLabel as resolvePaymentValueLabel, type PaymentLabel } from "@/lib/paymentMethods";
 import { type OrderItemRow, type OrderRow, supabase } from "@/lib/supabase";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type PaymentLabel = "Cash" | "GCash" | "Card" | "Online";
 type PaymentFilter = "all" | PaymentLabel;
 type ReportView = "summary" | "products" | "tables" | "orders";
 type StatusFilter = "completed" | "cancelled" | "all";
@@ -53,7 +53,7 @@ const channelLabels: Record<ChannelFilter, string> = {
   web: "Web only",
 };
 
-const paymentOrder: PaymentLabel[] = ["Cash", "GCash", "Card", "Online"];
+const paymentOrder: PaymentLabel[] = [...PAYMENT_LABEL_ORDER];
 
 const statusFilterOptions: Array<{ key: StatusFilter; label: string }> = [
   { key: "completed", label: "Completed" },
@@ -112,11 +112,7 @@ function amountForCsv(value: number): string {
 }
 
 function resolvePaymentLabel(order: OrderRow): PaymentLabel {
-  const method = String(order.payment_method ?? "").trim().toLowerCase();
-  if (method === "cash") return "Cash";
-  if (method === "gcash") return "GCash";
-  if (method === "card") return "Card";
-  return "Online";
+  return resolvePaymentValueLabel(order.payment_method);
 }
 
 function toNumber(value: unknown): number {
@@ -494,7 +490,7 @@ export default function AdminDailyReport() {
       const payment = resolvePaymentLabel(order);
       if (payment === "Cash") current.cash += amount;
       if (payment === "GCash") current.gcash += amount;
-      if (payment === "Card") current.card += amount;
+      if (payment === "Bank Transfer BPI") current.card += amount;
       if (payment === "Online") current.online += amount;
       grouped.set(key, current);
     }
@@ -586,7 +582,7 @@ export default function AdminDailyReport() {
 
     if (reportView === "tables") {
       exportRowsToCsv(
-        ["Table", "Completed Orders", "Items", "Revenue", "First OR", "Last OR", "Cash", "GCash", "Card", "Online"],
+        ["Table", "Completed Orders", "Items", "Revenue", "First OR", "Last OR", "Cash", "GCash", "Bank Transfer BPI", "Online"],
         tableRows.map((row) => [
           displayTableValue(row.tableNumber),
           row.orderCount,

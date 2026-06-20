@@ -1,3 +1,4 @@
+import { resolvePaymentLabel, type PaymentLabel } from "@/lib/paymentMethods";
 import { type OrderRow, supabase } from "@/lib/supabase";
 
 export interface DailySummaryRow {
@@ -53,7 +54,7 @@ export interface OrGapRow {
 }
 
 export interface PaymentMixRow {
-  payment_label: "Cash" | "GCash" | "Card" | "Online";
+  payment_label: PaymentLabel;
   order_count: number;
   total_amount: number;
 }
@@ -140,7 +141,7 @@ function mapOrGapRow(row: RpcRow): OrGapRow {
 
 function mapPaymentMixRow(row: RpcRow): PaymentMixRow {
   return {
-    payment_label: row.payment_label as PaymentMixRow["payment_label"],
+    payment_label: resolvePaymentLabel(row.payment_label),
     order_count: toNumber(row.order_count),
     total_amount: toNumber(row.total_amount),
   };

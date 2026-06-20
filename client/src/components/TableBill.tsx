@@ -1,3 +1,4 @@
+import { paymentMethodShortLabel } from "@/lib/paymentMethods";
 import type { BusinessSettings } from "@/lib/supabase";
 import type { TableDef } from "@/lib/tables";
 
@@ -166,7 +167,7 @@ export function TableBill(props: TableBillProps) {
   const addressLines = businessAddress.split(/\r?\n/).filter(Boolean);
   const orderRange = rangeLabel(props.rounds.map((round) => round.order_number).filter(Boolean));
   const orRange = rangeLabel(props.rounds.map((round) => round.or_number).filter(Boolean));
-  const paymentType = props.paymentMethod || "cash";
+  const paymentType = paymentMethodShortLabel(props.paymentMethod || "cash");
   const combinedItems = combineItems(props.rounds);
   const itemCount = combinedItems.reduce((total, item) => total + item.quantity, 0);
   const discountLines = props.discounts ?? [];
@@ -251,7 +252,7 @@ export function TableBill(props: TableBillProps) {
       </div>
       <div className="row">
         <span>P.Type:</span>
-        <span className="value">{props.isFinal === false ? "PENDING" : paymentType.toUpperCase()}</span>
+        <span className="value">{props.isFinal === false ? "PENDING" : paymentType}</span>
       </div>
       <div className="row">
         <span>Cashier:</span>
