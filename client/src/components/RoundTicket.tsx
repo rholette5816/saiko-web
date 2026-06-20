@@ -10,6 +10,7 @@ interface RoundTicketProps {
   cashierName?: string;
   customerName?: string;
   serviceType?: string;
+  voided?: boolean;
   createdAt: Date;
 }
 
@@ -39,6 +40,7 @@ function formatTime(value: Date) {
 
 export function RoundTicket(props: RoundTicketProps) {
   const ticketLabel = props.kind === "kitchen" ? "KITCHEN" : "BAR";
+  const headerLabel = props.voided ? `VOID - ${ticketLabel}` : ticketLabel;
   const cashierName = props.cashierName || "admin";
   const waiterName = props.waiterName ? props.waiterName.toUpperCase() : null;
   const customerName = props.customerName?.trim();
@@ -103,7 +105,7 @@ export function RoundTicket(props: RoundTicketProps) {
       `}</style>
 
       <div className="center ticket-kind">
-        {tableNumber ? `${ticketLabel} TABLE ${tableNumber}` : ticketLabel}
+        {tableNumber ? `${headerLabel} TABLE ${tableNumber}` : headerLabel}
       </div>
       <div>Order No.:{props.orderNumber}</div>
       <div>Cashier:{cashierName}</div>

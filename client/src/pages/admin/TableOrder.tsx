@@ -6,7 +6,7 @@ import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
 import { menuData } from "@/lib/menuData";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
-import { getTable, type TableDef } from "@/lib/tables";
+import { TABLES, getTable, type TableDef } from "@/lib/tables";
 import { ArrowLeft, ChevronDown, ChevronRight, Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -273,6 +273,10 @@ function ticketKey(orderId: string, kind: TicketKind): string {
   return `${orderId}-${kind}`;
 }
 
+function ticketKindLabel(kind: TicketKind): string {
+  return kind === "kitchen" ? "Kitchen" : "Bar";
+}
+
 function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSettings): BillPayload {
   const raw = (data ?? {}) as CloseTableBillResponse;
   const rounds = Array.isArray(raw.rounds)
@@ -332,8 +336,10 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [roundsLoading, setRoundsLoading] = useState(true);
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const [submittingRound, setSubmittingRound] = useState(false);
+  const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
   const [printingTicket, setPrintingTicket] = useState<TicketPayload | null>(null);
   const [activePrintKind, setActivePrintKind] = useState<TicketKind | null>(null);
+  const [printingTicketVoided, setPrintingTicketVoided] = useState(false);
   const [printingByTicket, setPrintingByTicket] = useState<Record<string, boolean>>({});
   const [billingOut, setBillingOut] = useState(false);
   const [hasBilledOut, setHasBilledOut] = useState(false);
@@ -347,6 +353,12 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     seniorName: "",
   });
   const [printingBill, setPrintingBill] = useState<BillPayload | null>(null);
+  const [cancelRound, setCancelRound] = useState<RoundWithItems | null>(null);
+  const [cancelReason, setCancelReason] = useState("Cancelled by staff");
+  const [cancellingRoundId, setCancellingRoundId] = useState<string | null>(null);
+  const [moveRound, setMoveRound] = useState<RoundWithItems | null>(null);
+  const [selectedMoveTable, setSelectedMoveTable] = useState("");
+  const [movingRoundId, setMovingRoundId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
 
@@ -375,6 +387,21 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const itemCategoryById = useMemo(
     () => new Map(allItems.map((item) => [item.id, item.categoryId])),
     [allItems],
+  );
+
+  const itemById = useMemo(
+    () => new Map(allItems.map((item) => [item.id, item])),
+    [allItems],
+  );
+
+  const editingRound = useMemo(
+    () => openRounds.find((round) => round.id === editingRoundId) ?? null,
+    [editingRoundId, openRounds],
+  );
+
+  const moveTableOptions = useMemo(
+    () => TABLES.filter((candidate) => candidate.id !== table?.id),
+    [table?.id],
   );
 
   const filteredItems = useMemo(() => {
@@ -411,6 +438,46 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       change: Math.max(0, round2(amountReceived - total)),
     };
   }, [closeForm.cashReceived, closeForm.paymentMethod, closeForm.senior, runningSubtotal]);
+
+  const roundManagementDisabled = hasBilledOut || showCloseModal || closing;
+  const roundManagementTitle = hasBilledOut
+    ? "This table has already been billed out"
+    : showCloseModal || closing
+      ? "Close and bill is in progress"
+      : undefined;
+
+  function buildOrderItemPayload() {
+    return orderItems.map((item) => ({
+      item_id: item.id,
+      item_name: item.name,
+      unit_price: item.price,
+      quantity: item.quantity,
+      line_total: round2(item.price * item.quantity),
+    }));
+  }
+
+  function cartItemsFromRound(round: RoundWithItems): TableCartItem[] {
+    return (round.order_items ?? [])
+      .map((item, index) => {
+        const itemId = item.item_id ?? item.id ?? `${round.id}-${index}`;
+        const menuItem = itemById.get(itemId);
+        return {
+          id: itemId,
+          name: item.item_name,
+          price: Number(item.unit_price ?? 0),
+          quantity: Number(item.quantity ?? 0),
+          image: menuItem?.image,
+          category: menuItem?.categoryId ?? itemCategoryById.get(itemId) ?? "all",
+        };
+      })
+      .filter((item) => item.quantity > 0);
+  }
+
+  function printedTicketKinds(round: RoundWithItems): TicketKind[] {
+    return (["kitchen", "bar"] as TicketKind[]).filter((kind) => {
+      return ticketPrintedAt(round, kind) !== null && getRoundTicketItems(round, kind).length > 0;
+    });
+  }
 
   async function loadRounds() {
     if (!table) return;
@@ -477,20 +544,10 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   }
 
   async function markTicketPrinted(orderId: string, kind: TicketKind) {
-    const round = openRounds.find((item) => item.id === orderId);
-    if (!round) return;
-
-    const printedAt = new Date().toISOString();
-    const metadata = parseRoundNotes(round.notes);
-    metadata.printStatus[kind] = {
-      printedAt,
-      count: ticketPrintCount(round, kind) + 1,
-    };
-
-    const { error: markError } = await supabase
-      .from("orders")
-      .update({ notes: composeRoundNotes(metadata.waiterName, metadata.notes, metadata.printStatus) })
-      .eq("id", orderId);
+    const { error: markError } = await supabase.rpc("mark_table_ticket_printed", {
+      p_order_id: orderId,
+      p_kind: kind,
+    });
 
     if (markError) {
       setError(markError.message);
@@ -500,29 +557,39 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     await loadRounds();
   }
 
-  function printTicket(payload: TicketPayload, kind: TicketKind) {
+  function printTicket(payload: TicketPayload, kind: TicketKind, options: { voided?: boolean } = {}) {
     const items = kind === "kitchen" ? payload.kitchenItems : payload.barItems;
-    if (items.length === 0) return;
+    if (items.length === 0) return Promise.resolve();
 
     const previousTitle = document.title;
     const key = ticketKey(payload.orderId, kind);
-    document.title = kind === "kitchen" ? "KITCHEN TICKET" : "BAR TICKET";
+    const title = kind === "kitchen" ? "KITCHEN TICKET" : "BAR TICKET";
+    document.title = options.voided ? `VOID ${title}` : title;
     setPrintingByTicket((current) => ({ ...current, [key]: true }));
     setPrintingTicket(payload);
     setActivePrintKind(kind);
-    // Give React time to commit the print container before opening the dialog.
-    window.setTimeout(() => {
-      window.print();
-      // Defer cleanup + DB write so the print preview keeps the ticket DOM intact
-      // even on browsers where window.print() returns immediately.
+    setPrintingTicketVoided(!!options.voided);
+
+    return new Promise<void>((resolve) => {
+      // Give React time to commit the print container before opening the dialog.
       window.setTimeout(() => {
-        document.title = previousTitle;
-        setActivePrintKind(null);
-        setPrintingTicket(null);
-        setPrintingByTicket((current) => ({ ...current, [key]: false }));
-        void markTicketPrinted(payload.orderId, kind);
-      }, 600);
-    }, 300);
+        window.print();
+        // Defer cleanup + DB write so the print preview keeps the ticket DOM intact
+        // even on browsers where window.print() returns immediately.
+        window.setTimeout(() => {
+          document.title = previousTitle;
+          setActivePrintKind(null);
+          setPrintingTicket(null);
+          setPrintingTicketVoided(false);
+          setPrintingByTicket((current) => ({ ...current, [key]: false }));
+          if (options.voided) {
+            resolve();
+            return;
+          }
+          void markTicketPrinted(payload.orderId, kind).finally(resolve);
+        }, 600);
+      }, 300);
+    });
   }
 
   useEffect(() => {
@@ -606,13 +673,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       p_table_number: table.id,
       p_subtotal: currentSubtotal,
       p_notes: composeRoundNotes(selectedWaiter, notes),
-      p_items: orderItems.map((item) => ({
-        item_id: item.id,
-        item_name: item.name,
-        unit_price: item.price,
-        quantity: item.quantity,
-        line_total: round2(item.price * item.quantity),
-      })),
+      p_items: buildOrderItemPayload(),
     });
 
     if (rpcError) {
@@ -634,6 +695,162 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setSubmittingRound(false);
     setHasBilledOut(false);
     await loadRounds();
+  }
+
+  function beginEditRound(round: RoundWithItems) {
+    if (!canManageBilling) {
+      setError("Only the cashier can edit this round.");
+      return;
+    }
+    if (roundManagementDisabled) {
+      setError(roundManagementTitle ?? "This round cannot be edited now.");
+      return;
+    }
+
+    setEditingRoundId(round.id);
+    setOrderItems(cartItemsFromRound(round));
+    setError(null);
+  }
+
+  async function handleEditRound(round: RoundWithItems) {
+    if (!orderItems.length || submittingRound) return;
+    if (!canManageBilling) {
+      setError("Only the cashier can edit this round.");
+      return;
+    }
+    if (roundManagementDisabled) {
+      setError(roundManagementTitle ?? "This round cannot be edited now.");
+      return;
+    }
+
+    setSubmittingRound(true);
+    setError(null);
+
+    const { error: rpcError } = await supabase.rpc("update_table_round_items", {
+      p_order_id: round.id,
+      p_items: buildOrderItemPayload(),
+    });
+
+    if (rpcError) {
+      setError(rpcError.message);
+      setSubmittingRound(false);
+      return;
+    }
+
+    setEditingRoundId(null);
+    setOrderItems([]);
+    setNotes("");
+    setSubmittingRound(false);
+    setHasBilledOut(false);
+    await loadRounds();
+  }
+
+  function beginCancelRound(round: RoundWithItems) {
+    if (!canManageBilling) {
+      setError("Only the cashier can cancel this round.");
+      return;
+    }
+    if (roundManagementDisabled) {
+      setError(roundManagementTitle ?? "This round cannot be cancelled now.");
+      return;
+    }
+
+    setCancelRound(round);
+    setCancelReason("Cancelled by staff");
+    setError(null);
+  }
+
+  async function handleConfirmCancelRound() {
+    if (!cancelRound || cancellingRoundId) return;
+    if (!canManageBilling) {
+      setError("Only the cashier can cancel this round.");
+      return;
+    }
+    if (roundManagementDisabled) {
+      setError(roundManagementTitle ?? "This round cannot be cancelled now.");
+      return;
+    }
+
+    const voidKinds = printedTicketKinds(cancelRound);
+    const voidPayload = voidKinds.length ? buildRoundTicketPayload(cancelRound) : null;
+    setCancellingRoundId(cancelRound.id);
+    setError(null);
+
+    const { error: rpcError } = await supabase.rpc("cancel_table_round", {
+      p_order_id: cancelRound.id,
+      p_reason: cancelReason.trim() || "Cancelled by staff",
+    });
+
+    if (rpcError) {
+      setError(rpcError.message);
+      setCancellingRoundId(null);
+      return;
+    }
+
+    if (editingRoundId === cancelRound.id) {
+      setEditingRoundId(null);
+      setOrderItems([]);
+    }
+    setCancelRound(null);
+    setCancellingRoundId(null);
+    await loadRounds();
+
+    if (voidPayload) {
+      for (const kind of voidKinds) {
+        await printTicket(voidPayload, kind, { voided: true });
+      }
+    }
+  }
+
+  function beginMoveRound(round: RoundWithItems) {
+    if (!canManageBilling) {
+      setError("Only the cashier can move this round.");
+      return;
+    }
+    if (roundManagementDisabled) {
+      setError(roundManagementTitle ?? "This round cannot be moved now.");
+      return;
+    }
+
+    setMoveRound(round);
+    setSelectedMoveTable(moveTableOptions[0]?.id ?? "");
+    setError(null);
+  }
+
+  async function handleConfirmMoveRound() {
+    if (!moveRound || !selectedMoveTable || movingRoundId) return;
+    if (!canManageBilling) {
+      setError("Only the cashier can move this round.");
+      return;
+    }
+    if (roundManagementDisabled) {
+      setError(roundManagementTitle ?? "This round cannot be moved now.");
+      return;
+    }
+
+    setMovingRoundId(moveRound.id);
+    setError(null);
+
+    const { error: rpcError } = await supabase.rpc("transfer_table_round", {
+      p_order_id: moveRound.id,
+      p_new_table_number: selectedMoveTable,
+    });
+
+    if (rpcError) {
+      setError(rpcError.message);
+      setMovingRoundId(null);
+      return;
+    }
+
+    const destination = selectedMoveTable;
+    if (editingRoundId === moveRound.id) {
+      setEditingRoundId(null);
+      setOrderItems([]);
+    }
+    setMoveRound(null);
+    setMovingRoundId(null);
+    await loadRounds();
+    navigate(`/admin/tables/${destination}`);
   }
 
   function openCloseBill() {
@@ -798,7 +1015,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         </div>
         <button
           type="button"
-          onClick={() => printTicket(buildRoundTicketPayload(round), kind)}
+          onClick={() => void printTicket(buildRoundTicketPayload(round), kind)}
           disabled={isPrinting}
           className={`inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-bold uppercase tracking-wide ${
             printedAt
@@ -813,6 +1030,52 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       </div>
     );
   }
+
+  function renderRoundManagementActions(round: RoundWithItems) {
+    if (!canManageBilling) return null;
+
+    const busy = submittingRound || cancellingRoundId !== null || movingRoundId !== null;
+    const disabled = roundManagementDisabled || busy;
+    const editLabel = editingRoundId === round.id ? "Editing" : "Edit";
+    const cancelLabel = cancellingRoundId === round.id ? "Cancelling..." : "Cancel";
+    const moveLabel = movingRoundId === round.id ? "Moving..." : "Move Table";
+
+    return (
+      <div className="grid gap-2 px-3 pb-3 sm:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => beginEditRound(round)}
+          disabled={disabled}
+          title={roundManagementTitle}
+          className="inline-flex h-9 items-center justify-center rounded-md border border-[#0d0f13] bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#0d0f13] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {editLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => beginCancelRound(round)}
+          disabled={disabled}
+          title={roundManagementTitle}
+          className="inline-flex h-9 items-center justify-center rounded-md border border-[#ac312d] bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#ac312d] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {cancelLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => beginMoveRound(round)}
+          disabled={disabled}
+          title={roundManagementTitle}
+          className="inline-flex h-9 items-center justify-center rounded-md border border-[#c08643] bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#c08643] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {moveLabel}
+        </button>
+      </div>
+    );
+  }
+
+  const cancelVoidKinds = cancelRound ? printedTicketKinds(cancelRound) : [];
+  const cancelVoidLabel = cancelVoidKinds.map(ticketKindLabel).join(" and ");
+  const selectedMoveTableDef = TABLES.find((candidate) => candidate.id === selectedMoveTable);
 
   if (!table) {
     return (
@@ -1005,6 +1268,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                         {renderTicketAction(round, "kitchen")}
                         {renderTicketAction(round, "bar")}
                       </div>
+                      {renderRoundManagementActions(round)}
                       {expanded && (
                         <div className="border-t border-[#ebe9e6] p-3 pt-2">
                           {(round.order_items ?? []).map((item, itemIndex) => (
@@ -1023,12 +1287,18 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               </div>
 
               <div className="mt-5 border-t border-[#ebe9e6] pt-4">
-                <h2 className="text-base font-bold uppercase tracking-wide text-[#0d0f13]">Current Round</h2>
-                <p className="mt-1 text-xs text-[#705d48]">{orderItems.length} line items</p>
+                <h2 className="text-base font-bold uppercase tracking-wide text-[#0d0f13]">
+                  {editingRound ? "Edit Round" : "Current Round"}
+                </h2>
+                <p className="mt-1 text-xs text-[#705d48]">
+                  {editingRound ? `${editingRound.order_number} | ${orderItems.length} line items` : `${orderItems.length} line items`}
+                </p>
 
                 <div className="mt-2 max-h-[30vh] space-y-2 overflow-y-auto pr-1 xl:max-h-[34vh]">
                   {orderItems.length === 0 ? (
-                    <p className="py-3 text-sm text-[#705d48]">Tap menu items to start this round.</p>
+                    <p className="py-3 text-sm text-[#705d48]">
+                      {editingRound ? "Tap menu items to update this round." : "Tap menu items to start this round."}
+                    </p>
                   ) : (
                     orderItems.map((item) => (
                       <div key={item.id} className="rounded-lg border border-[#ebe9e6] p-2.5">
@@ -1070,32 +1340,36 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   )}
                 </div>
 
-                <div className="mt-3">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Waiter</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowWaiterModal(true)}
-                    className={`mt-1 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm font-semibold ${
-                      waiterName
-                        ? "border-[#2d7a3e] bg-[#2d7a3e]/10 text-[#0d0f13]"
-                        : "border-[#d8d2cb] bg-white text-[#705d48]"
-                    }`}
-                  >
-                    <span>{waiterName || "Choose waiter"}</span>
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
+                {!editingRound && (
+                  <>
+                    <div className="mt-3">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Waiter</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowWaiterModal(true)}
+                        className={`mt-1 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm font-semibold ${
+                          waiterName
+                            ? "border-[#2d7a3e] bg-[#2d7a3e]/10 text-[#0d0f13]"
+                            : "border-[#d8d2cb] bg-white text-[#705d48]"
+                        }`}
+                      >
+                        <span>{waiterName || "Choose waiter"}</span>
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
 
-                <div className="mt-3">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Round Notes</label>
-                  <textarea
-                    value={notes}
-                    onChange={(event) => setNotes(event.target.value)}
-                    rows={2}
-                    placeholder="Optional kitchen notes"
-                    className="mt-1 w-full resize-none rounded-lg border border-[#d8d2cb] px-3 py-2 text-sm"
-                  />
-                </div>
+                    <div className="mt-3">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Round Notes</label>
+                      <textarea
+                        value={notes}
+                        onChange={(event) => setNotes(event.target.value)}
+                        rows={2}
+                        placeholder="Optional kitchen notes"
+                        className="mt-1 w-full resize-none rounded-lg border border-[#d8d2cb] px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="mt-3 border-t border-[#ebe9e6] pt-3">
                   <div className="mb-3 flex items-center justify-between text-base">
@@ -1104,11 +1378,17 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   </div>
                   <button
                     type="button"
-                    onClick={handleSubmitRound}
-                    disabled={!orderItems.length || submittingRound || !waiterName.trim()}
+                    onClick={() => {
+                      if (editingRound) {
+                        void handleEditRound(editingRound);
+                        return;
+                      }
+                      void handleSubmitRound();
+                    }}
+                    disabled={!orderItems.length || submittingRound || (!editingRound && !waiterName.trim())}
                     className="h-11 w-full rounded-lg bg-[#ac312d] text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {submittingRound ? "Submitting..." : "Submit Round"}
+                    {submittingRound ? (editingRound ? "Saving..." : "Submitting...") : editingRound ? "Save Changes" : "Submit Round"}
                   </button>
                 </div>
               </div>
@@ -1303,6 +1583,137 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
           </div>
         )}
 
+        {cancelRound && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
+            <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-[#0d0f13]">Cancel Round</h2>
+                  <p className="mt-1 text-sm text-[#705d48]">
+                    {cancelRound.order_number} | {countRoundItems(cancelRound)} items | {currencyPhp(roundSubtotal(cancelRound))}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCancelRound(null)}
+                  disabled={cancellingRoundId === cancelRound.id}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#d8d2cb] text-[#0d0f13] disabled:opacity-50"
+                  title="Close modal"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <p className="text-sm text-[#705d48]">
+                  {cancelVoidKinds.length > 0
+                    ? `This round has printed tickets. A VOID ticket will print for ${cancelVoidLabel}.`
+                    : "This sets the round status to cancelled. No VOID ticket will print because no ticket has been printed."}
+                </p>
+
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Reason</label>
+                  <input
+                    type="text"
+                    value={cancelReason}
+                    onChange={(event) => setCancelReason(event.target.value)}
+                    placeholder="Cancelled by staff"
+                    className="mt-1 h-11 w-full rounded-lg border border-[#d8d2cb] px-3 text-sm"
+                  />
+                </div>
+
+                {error && <p className="text-sm font-semibold text-[#ac312d]">{error}</p>}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleConfirmCancelRound()}
+                    disabled={cancellingRoundId === cancelRound.id}
+                    className="h-11 rounded-lg bg-[#ac312d] text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50"
+                  >
+                    {cancellingRoundId === cancelRound.id ? "Cancelling..." : "Confirm Cancel"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCancelRound(null)}
+                    disabled={cancellingRoundId === cancelRound.id}
+                    className="h-11 rounded-lg border border-[#0d0f13] text-sm font-semibold uppercase tracking-wide text-[#0d0f13] disabled:opacity-50"
+                  >
+                    Keep Round
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {moveRound && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/60 p-4">
+            <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-[#0d0f13]">Move Table</h2>
+                  <p className="mt-1 text-sm text-[#705d48]">
+                    {moveRound.order_number} | From Table {table.number}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMoveRound(null)}
+                  disabled={movingRoundId === moveRound.id}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#d8d2cb] text-[#0d0f13] disabled:opacity-50"
+                  title="Close modal"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Destination Table</label>
+                  <select
+                    value={selectedMoveTable}
+                    onChange={(event) => setSelectedMoveTable(event.target.value)}
+                    className="mt-1 h-11 w-full rounded-lg border border-[#d8d2cb] bg-white px-3 text-sm font-semibold text-[#0d0f13]"
+                  >
+                    {moveTableOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        Table {option.number} | {option.capacity}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedMoveTableDef && (
+                    <p className="mt-1 text-xs text-[#705d48]">
+                      Moving to Table {selectedMoveTableDef.number} | {selectedMoveTableDef.capacity}
+                    </p>
+                  )}
+                </div>
+
+                {error && <p className="text-sm font-semibold text-[#ac312d]">{error}</p>}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleConfirmMoveRound()}
+                    disabled={!selectedMoveTable || movingRoundId === moveRound.id}
+                    className="h-11 rounded-lg bg-[#c08643] text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50"
+                  >
+                    {movingRoundId === moveRound.id ? "Moving..." : "Confirm Move"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMoveRound(null)}
+                    disabled={movingRoundId === moveRound.id}
+                    className="h-11 rounded-lg border border-[#0d0f13] text-sm font-semibold uppercase tracking-wide text-[#0d0f13] disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {printingTicket && activePrintKind === "kitchen" && printingTicket.kitchenItems.length > 0 && (
           <div className="print-tickets-root">
             <RoundTicket
@@ -1316,6 +1727,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               waiterName={printingTicket.waiterName}
               cashierName={cashierName}
               serviceType="DINE IN"
+              voided={printingTicketVoided}
               createdAt={printingTicket.createdAt}
             />
           </div>
@@ -1334,6 +1746,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               waiterName={printingTicket.waiterName}
               cashierName={cashierName}
               serviceType="DINE IN"
+              voided={printingTicketVoided}
               createdAt={printingTicket.createdAt}
             />
           </div>
