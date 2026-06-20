@@ -12,7 +12,7 @@ import {
   type DiscountableBillItem,
   type HolderType,
 } from "@/lib/discountAllocations";
-import { menuData } from "@/lib/menuData";
+import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { TABLES, getTable, type TableDef } from "@/lib/tables";
 import { ArrowLeft, ChevronDown, ChevronRight, Minus, Plus, Search, Trash2, X } from "lucide-react";
@@ -453,13 +453,20 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [unmergingTable, setUnmergingTable] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const [menuData, setMenuData] = useState<MenuCategory[]>([]);
+
+  useEffect(() => {
+    fetchMenuCategories()
+      .then(setMenuData)
+      .catch((menuError: Error) => setError(menuError.message));
+  }, []);
 
   const categories = useMemo(
     () => [
       { id: "all", name: "All", emoji: "All" },
       ...menuData.map((category) => ({ id: category.id, name: category.name, emoji: category.emoji })),
     ],
-    [],
+    [menuData],
   );
 
   const allItems = useMemo<TableMenuItem[]>(
@@ -473,7 +480,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
           categoryId: category.id,
         })),
       ),
-    [],
+    [menuData],
   );
 
   const itemCategoryById = useMemo(

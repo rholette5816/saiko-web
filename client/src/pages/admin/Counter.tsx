@@ -3,7 +3,7 @@ import { CounterReceipt } from "@/components/CounterReceipt";
 import { RoundTicket } from "@/components/RoundTicket";
 import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
-import { menuData } from "@/lib/menuData";
+import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
 import { composeOrderTicketNotes, getTicketStatus, parseOrderTicketNotes } from "@/lib/orderTickets";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { Minus, Plus, Search, Trash2, X } from "lucide-react";
@@ -155,13 +155,20 @@ export default function AdminCounter() {
   const [printingByTicket, setPrintingByTicket] = useState<Record<TicketKind, boolean>>({ kitchen: false, bar: false });
   const [lastCompletedOrder, setLastCompletedOrder] = useState<CompletedOrder | null>(null);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [menuData, setMenuData] = useState<MenuCategory[]>([]);
+
+  useEffect(() => {
+    fetchMenuCategories()
+      .then(setMenuData)
+      .catch((menuError: Error) => setError(menuError.message));
+  }, []);
 
   const categories = useMemo(
     () => [
       { id: "all", name: "All", emoji: "All" },
       ...menuData.map((category) => ({ id: category.id, name: category.name, emoji: category.emoji })),
     ],
-    [],
+    [menuData],
   );
 
   const allItems = useMemo<CounterMenuItem[]>(
@@ -175,7 +182,7 @@ export default function AdminCounter() {
           categoryId: category.id,
         })),
       ),
-    [],
+    [menuData],
   );
 
   const filteredItems = useMemo(() => {
