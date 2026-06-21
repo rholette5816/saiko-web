@@ -1,5 +1,7 @@
 -- Cash drawer reconciliation: closings, payouts, discrepancy view, and supporting RPCs.
 
+set search_path = public, pg_catalog;
+
 create table if not exists cash_drawer_closings (
   id uuid primary key default gen_random_uuid(),
   business_date date not null,
@@ -311,7 +313,7 @@ with completed as (
   select
     (o.created_at at time zone 'Asia/Manila')::date as business_date,
     o.*
-  from orders o
+  from public.orders o
   where o.status = 'completed'
 )
 select
@@ -361,7 +363,7 @@ select
   o.total_amount,
   'billed_not_settled'::text,
   'Ticket printed but order not settled after 24 hours.'::text
-from orders o
+from public.orders o
 where o.status in ('preparing', 'ready')
   and o.created_at < now() - interval '24 hours'
   and o.kitchen_ticket_printed_at is not null;
@@ -371,13 +373,13 @@ create or replace function get_discrepancies(
   p_end date,
   p_type text default null
 )
-returns setof discrepancy_findings_v1
+returns setof public.discrepancy_findings_v1
 language sql
 security definer
 set search_path = public
 as $fn$
   select *
-  from discrepancy_findings_v1
+  from public.discrepancy_findings_v1
   where business_date between p_start and p_end
     and (p_type is null or finding_type = p_type)
   order by business_date desc, finding_type, order_number;
