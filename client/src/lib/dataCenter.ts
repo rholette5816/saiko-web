@@ -59,6 +59,12 @@ export interface PaymentMixRow {
   total_amount: number;
 }
 
+export interface HourlySalesRow {
+  hour_of_day: number;
+  order_count: number;
+  net_sales: number;
+}
+
 export type ChannelFilter = "counter" | "web" | "both";
 
 type RpcRow = Record<string, unknown>;
@@ -144,6 +150,14 @@ function mapPaymentMixRow(row: RpcRow): PaymentMixRow {
     payment_label: resolvePaymentLabel(row.payment_label),
     order_count: toNumber(row.order_count),
     total_amount: toNumber(row.total_amount),
+  };
+}
+
+function mapHourlySalesRow(row: RpcRow): HourlySalesRow {
+  return {
+    hour_of_day: toNumber(row.hour_of_day),
+    order_count: toNumber(row.order_count),
+    net_sales: toNumber(row.net_sales),
   };
 }
 
@@ -240,4 +254,23 @@ export async function fetchPaymentMix(params: {
   }
 
   return rows(data).map(mapPaymentMixRow);
+}
+
+export async function fetchHourlySales(params: {
+  start: string;
+  end: string;
+  channel: ChannelFilter;
+}): Promise<HourlySalesRow[]> {
+  const { data, error } = await supabase.rpc("get_hourly_sales", {
+    p_start: params.start,
+    p_end: params.end,
+    p_channel: channelParam(params.channel),
+  });
+
+  if (error) {
+    console.error("[dataCenter] fetchHourlySales:", error);
+    return [];
+  }
+
+  return rows(data).map(mapHourlySalesRow);
 }

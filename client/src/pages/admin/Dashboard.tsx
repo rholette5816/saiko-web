@@ -1,7 +1,26 @@
 import { ReportMarkdown } from "@/components/ReportMarkdown";
 import { AdminLayout } from "@/components/AdminLayout";
-import { computeKpis, countByStatus, groupRevenueByDay } from "@/lib/analytics";
+import { HourlySalesChart } from "@/components/dataCenter/HourlySalesChart";
+import { KpiTile } from "@/components/dataCenter/KpiTile";
+import { OrGapPanel } from "@/components/dataCenter/OrGapPanel";
+import { PaymentMixDonut } from "@/components/dataCenter/PaymentMixDonut";
+import { TopItemsList } from "@/components/dataCenter/TopItemsList";
+import { countByStatus, groupRevenueByDay } from "@/lib/analytics";
+import {
+  fetchDailySummary,
+  fetchHourlySales,
+  fetchOrGaps,
+  fetchPaymentMix,
+  fetchProductSales,
+  type DailySummaryRow,
+  type HourlySalesRow,
+  type OrGapRow,
+  type PaymentMixRow,
+  type ProductSalesRow,
+} from "@/lib/dataCenter";
 import { type DateRange, type DateRangeKey, getCustomRange, getRange } from "@/lib/dateRanges";
+import { rangeForPreset, shiftYmdManila } from "@/lib/manilaDate";
+import { avgTicket, buildTrend, deltaPct, summarizeRows, trendAverage } from "@/lib/salesMetrics";
 import { supabase, type OrderRow } from "@/lib/supabase";
 import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -23,8 +42,81 @@ const rangeOptions: Array<{ key: Exclude<DateRangeKey, "custom">; label: string 
   { key: "thisMonth", label: "This Month" },
 ];
 
+const phpFormatter = new Intl.NumberFormat("en-PH", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const integerFormatter = new Intl.NumberFormat("en-PH", {
+  maximumFractionDigits: 0,
+});
+
 function currencyPhp(value: number): string {
   return `PHP ${Math.round(value).toLocaleString("en-PH")}`;
+}
+
+function php(value: number): string {
+  return `PHP ${phpFormatter.format(Number(value || 0))}`;
+}
+
+function integer(value: number): string {
+  return integerFormatter.format(Number(value || 0));
+}
+
+function ymdUtc(ymd: string): number {
+  const [year, month, day] = ymd.split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+function rangeDays(start: string, end: string): number {
+  return Math.max(1, Math.round((ymdUtc(end) - ymdUtc(start)) / 86400000) + 1);
+}
+
+async function safeRows<T>(promise: Promise<T[]>): Promise<T[]> {
+  try {
+    return await promise;
+  } catch (error) {
+    console.error("[Dashboard] fetch failed:", error);
+    return [];
+  }
+}
+
+function netSalesVariant(today: number, trend: number[]): "default" | "warning" {
+  const baseline = trendAverage(trend.slice(0, 7));
+  if (baseline <= 0) return "default";
+  return today < baseline * 0.7 ? "warning" : "default";
+}
+
+function ordersVariant(today: number, trend: number[]): "default" | "warning" {
+  const baseline = trendAverage(trend.slice(0, 7));
+  if (baseline <= 0) return "default";
+  return today < baseline * 0.5 ? "warning" : "default";
+}
+
+function cancellationsVariant(cancellations: number, orderCount: number): "default" | "warning" {
+  if (orderCount === 0) return cancellations > 0 ? "warning" : "default";
+  return cancellations / orderCount > 0.05 ? "warning" : "default";
+}
+
+function netSalesHint(today: number, trend: number[]): string | undefined {
+  const baseline = trendAverage(trend.slice(0, 7));
+  if (baseline <= 0) return undefined;
+  if (today < baseline * 0.7) return "Below 7 day average";
+  return undefined;
+}
+
+function ordersHint(today: number, trend: number[]): string | undefined {
+  const baseline = trendAverage(trend.slice(0, 7));
+  if (baseline <= 0) return undefined;
+  if (today < baseline * 0.5) return "Half of 7 day average";
+  return undefined;
+}
+
+function cancellationsHint(cancellations: number, orderCount: number): string | undefined {
+  if (orderCount === 0) return undefined;
+  const rate = cancellations / orderCount;
+  if (rate > 0.05) return `${Math.round(rate * 1000) / 10}% cancellation rate`;
+  return undefined;
 }
 
 export default function AdminDashboard() {
@@ -39,6 +131,22 @@ export default function AdminDashboard() {
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
   const [reportRange, setReportRange] = useState<{ from: string; to: string; label: string } | null>(null);
+  const [summaryRows, setSummaryRows] = useState<DailySummaryRow[]>([]);
+  const [priorSummaryRows, setPriorSummaryRows] = useState<DailySummaryRow[]>([]);
+  const [sparklineRows, setSparklineRows] = useState<DailySummaryRow[]>([]);
+  const [paymentRows, setPaymentRows] = useState<PaymentMixRow[]>([]);
+  const [productRows, setProductRows] = useState<ProductSalesRow[]>([]);
+  const [orGaps, setOrGaps] = useState<OrGapRow[]>([]);
+  const [hourlyRows, setHourlyRows] = useState<HourlySalesRow[]>([]);
+
+  const dashboardYmdRange = useMemo(() => {
+    if (rangeKey === "custom") {
+      if (!customStart || !customEnd) return null;
+      return { start: customStart, end: customEnd };
+    }
+
+    return rangeForPreset(rangeKey);
+  }, [customEnd, customStart, rangeKey]);
 
   const fetchOrders = useCallback(
     async (silent = false) => {
@@ -63,9 +171,57 @@ export default function AdminDashboard() {
     [range.startIso, range.endIso],
   );
 
+  const fetchDashboardMetrics = useCallback(async () => {
+    if (!dashboardYmdRange) {
+      setSummaryRows([]);
+      setPriorSummaryRows([]);
+      setSparklineRows([]);
+      setPaymentRows([]);
+      setProductRows([]);
+      setOrGaps([]);
+      setHourlyRows([]);
+      return;
+    }
+
+    const days = rangeDays(dashboardYmdRange.start, dashboardYmdRange.end);
+    const priorStart = shiftYmdManila(dashboardYmdRange.start, -days);
+    const priorEnd = shiftYmdManila(dashboardYmdRange.end, -days);
+    const sparkStart = shiftYmdManila(dashboardYmdRange.end, -13);
+
+    const [
+      nextSummary,
+      nextPrior,
+      nextSparkline,
+      nextPaymentRows,
+      nextProductRows,
+      nextGaps,
+      nextHourlyRows,
+    ] = await Promise.all([
+      safeRows(fetchDailySummary({ start: dashboardYmdRange.start, end: dashboardYmdRange.end, channel: "both", status: "all" })),
+      safeRows(fetchDailySummary({ start: priorStart, end: priorEnd, channel: "both", status: "all" })),
+      safeRows(fetchDailySummary({ start: sparkStart, end: dashboardYmdRange.end, channel: "both", status: "all" })),
+      safeRows(fetchPaymentMix({ start: dashboardYmdRange.start, end: dashboardYmdRange.end, channel: "both" })),
+      safeRows(fetchProductSales({ start: dashboardYmdRange.start, end: dashboardYmdRange.end, channel: "both" })),
+      safeRows(fetchOrGaps({ start: dashboardYmdRange.start, end: dashboardYmdRange.end })),
+      safeRows(fetchHourlySales({ start: dashboardYmdRange.start, end: dashboardYmdRange.end, channel: "both" })),
+    ]);
+
+    setSummaryRows(nextSummary);
+    setPriorSummaryRows(nextPrior);
+    setSparklineRows(nextSparkline);
+    setPaymentRows(nextPaymentRows);
+    setProductRows(nextProductRows);
+    setOrGaps(nextGaps);
+    setHourlyRows(nextHourlyRows);
+  }, [dashboardYmdRange]);
+
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  useEffect(() => {
+    void fetchDashboardMetrics();
+  }, [fetchDashboardMetrics]);
 
   useEffect(() => {
     const onNewOrder = () => fetchOrders(true);
@@ -77,12 +233,39 @@ export default function AdminDashboard() {
     };
   }, [fetchOrders]);
 
-  const kpis = useMemo(() => computeKpis(orders), [orders]);
   const revenueData = useMemo(
     () => groupRevenueByDay(orders, new Date(range.startIso), new Date(range.endIso)),
     [orders, range.startIso, range.endIso],
   );
   const statusData = useMemo(() => countByStatus(orders), [orders]);
+  const totals = useMemo(() => summarizeRows(summaryRows), [summaryRows]);
+  const priorTotals = useMemo(() => summarizeRows(priorSummaryRows), [priorSummaryRows]);
+  const sparkStart = useMemo(
+    () => (dashboardYmdRange ? shiftYmdManila(dashboardYmdRange.end, -13) : ""),
+    [dashboardYmdRange],
+  );
+  const trends = useMemo(
+    () => ({
+      net: dashboardYmdRange ? buildTrend(sparklineRows, sparkStart, (row) => row.netSales) : [],
+      orders: dashboardYmdRange ? buildTrend(sparklineRows, sparkStart, (row) => row.orderCount) : [],
+      avg: dashboardYmdRange ? buildTrend(sparklineRows, sparkStart, avgTicket) : [],
+      cancellations: dashboardYmdRange ? buildTrend(sparklineRows, sparkStart, (row) => row.cancellations) : [],
+    }),
+    [dashboardYmdRange, sparkStart, sparklineRows],
+  );
+
+  const averageTicket = avgTicket(totals);
+  const priorAverageTicket = avgTicket(priorTotals);
+  const netDelta = deltaPct(totals.netSales, priorTotals.netSales);
+  const ordersDelta = deltaPct(totals.orderCount, priorTotals.orderCount);
+  const avgDelta = deltaPct(averageTicket, priorAverageTicket);
+  const cancellationsDelta = deltaPct(totals.cancellations, priorTotals.cancellations);
+  const netVariant = netSalesVariant(totals.netSales, trends.net);
+  const ordersVariantValue = ordersVariant(totals.orderCount, trends.orders);
+  const cancellationsVariantValue = cancellationsVariant(totals.cancellations, totals.orderCount);
+  const netSalesHintText = netSalesHint(totals.netSales, trends.net);
+  const ordersHintText = ordersHint(totals.orderCount, trends.orders);
+  const cancellationsHintText = cancellationsHint(totals.cancellations, totals.orderCount);
 
   function applyRange(next: Exclude<DateRangeKey, "custom">) {
     setRangeKey(next);
@@ -239,23 +422,42 @@ export default function AdminDashboard() {
 
         {!loading && !error && orders.length > 0 && (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="bg-white rounded-lg p-4">
-                <p className="text-xs uppercase tracking-wide text-[#705d48]">Orders</p>
-                <p className="text-2xl font-bold text-[#0d0f13] mt-1">{kpis.totalCount}</p>
-              </div>
-              <div className="bg-white rounded-lg p-4">
-                <p className="text-xs uppercase tracking-wide text-[#705d48]">Gross Sales</p>
-                <p className="text-2xl font-bold text-[#0d0f13] mt-1">{currencyPhp(kpis.grossSales)}</p>
-              </div>
-              <div className="bg-white rounded-lg p-4">
-                <p className="text-xs uppercase tracking-wide text-[#705d48]">Completed Sales</p>
-                <p className="text-2xl font-bold text-[#0d0f13] mt-1">{currencyPhp(kpis.completedSales)}</p>
-              </div>
-              <div className="bg-white rounded-lg p-4">
-                <p className="text-xs uppercase tracking-wide text-[#705d48]">Avg Order Value</p>
-                <p className="text-2xl font-bold text-[#0d0f13] mt-1">{currencyPhp(kpis.averageOrderValue)}</p>
-              </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              <KpiTile
+                label="Net Sales"
+                value={php(totals.netSales)}
+                hint={netSalesHintText ?? `Prior period ${php(priorTotals.netSales)}`}
+                deltaPct={netDelta}
+                deltaLabel="vs prior period"
+                trend={trends.net}
+                variant={netVariant}
+              />
+              <KpiTile
+                label="Orders"
+                value={integer(totals.orderCount)}
+                hint={ordersHintText ?? `Prior period ${integer(priorTotals.orderCount)}`}
+                deltaPct={ordersDelta}
+                deltaLabel="vs prior period"
+                trend={trends.orders}
+                variant={ordersVariantValue}
+              />
+              <KpiTile
+                label="Average Ticket"
+                value={php(averageTicket)}
+                hint={totals.orderCount > 0 ? `${integer(totals.orderCount)} orders` : "No orders"}
+                deltaPct={avgDelta}
+                deltaLabel="vs prior period"
+                trend={trends.avg}
+              />
+              <KpiTile
+                label="Cancellations"
+                value={integer(totals.cancellations)}
+                hint={cancellationsHintText ?? `Prior period ${integer(priorTotals.cancellations)}`}
+                deltaPct={cancellationsDelta}
+                deltaLabel="vs prior period"
+                trend={trends.cancellations}
+                variant={cancellationsVariantValue}
+              />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -296,6 +498,15 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <PaymentMixDonut rows={paymentRows} />
+              <TopItemsList rows={productRows} limit={10} />
+            </div>
+
+            <OrGapPanel gaps={orGaps} />
+
+            <HourlySalesChart rows={hourlyRows} />
 
             <div className="bg-white rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">

@@ -2,6 +2,7 @@ import { AdminLayout } from "@/components/AdminLayout";
 import { BirPackButton } from "@/components/dataCenter/BirPackButton";
 import { DataCenterShell } from "@/components/dataCenter/DataCenterShell";
 import { DiscrepancyList } from "@/components/dataCenter/DiscrepancyList";
+import { HourlySalesChart } from "@/components/dataCenter/HourlySalesChart";
 import { KpiTile } from "@/components/dataCenter/KpiTile";
 import { OrGapPanel } from "@/components/dataCenter/OrGapPanel";
 import { PaymentMixDonut } from "@/components/dataCenter/PaymentMixDonut";
@@ -24,11 +25,13 @@ import {
 import { useActiveCashier } from "@/lib/cashier";
 import {
   fetchDailySummary,
+  fetchHourlySales,
   fetchOrGaps,
   fetchPaymentMix,
   fetchProductSales,
   fetchTableSales,
   type DailySummaryRow,
+  type HourlySalesRow,
   type OrGapRow,
   type PaymentMixRow,
   type ProductSalesRow,
@@ -39,17 +42,12 @@ import { defaultFilters, filtersFromSearch, filtersToSearch, type DataCenterFilt
 import { getCustomRange } from "@/lib/dateRanges";
 import { fetchDiscrepancies, type DiscrepancyRow } from "@/lib/discrepancies";
 import { rangeLabel, shiftYmdManila } from "@/lib/manilaDate";
+import { avgTicket, buildTrend, deltaPct, summarizeRows, trendAverage } from "@/lib/salesMetrics";
 import { type OrderItemRow, type OrderRow, supabase } from "@/lib/supabase";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 type OrderWithItems = OrderRow & { order_items?: OrderItemRow[] };
-
-interface SummaryTotals {
-  orderCount: number;
-  netSales: number;
-  cancellations: number;
-}
 
 const channelLabels: Record<DataCenterFilters["channel"], string> = {
   counter: "Counter",
@@ -107,44 +105,6 @@ function rangeDays(start: string, end: string): number {
   return Math.max(1, Math.round((ymdUtc(end) - ymdUtc(start)) / 86400000) + 1);
 }
 
-function summarizeRows(rows: DailySummaryRow[]): SummaryTotals {
-  return rows.reduce(
-    (totals, row) => ({
-      orderCount: totals.orderCount + Number(row.order_count || 0),
-      netSales: totals.netSales + Number(row.net_sales || 0),
-      cancellations: totals.cancellations + (row.status === "cancelled" ? Number(row.order_count || 0) : 0),
-    }),
-    { orderCount: 0, netSales: 0, cancellations: 0 },
-  );
-}
-
-function deltaPct(current: number, prior: number): number | null {
-  if (!Number.isFinite(current) || !Number.isFinite(prior) || prior === 0) return null;
-  return Math.round(((current - prior) / prior) * 1000) / 10;
-}
-
-function avgTicket(totals: SummaryTotals): number {
-  return totals.orderCount > 0 ? totals.netSales / totals.orderCount : 0;
-}
-
-function buildTrend(
-  rows: DailySummaryRow[],
-  start: string,
-  pick: (totals: SummaryTotals) => number,
-): number[] {
-  const byDate = new Map<string, DailySummaryRow[]>();
-  for (const row of rows) {
-    const current = byDate.get(row.business_date) ?? [];
-    current.push(row);
-    byDate.set(row.business_date, current);
-  }
-
-  return Array.from({ length: 14 }, (_unused, index) => {
-    const date = shiftYmdManila(start, index);
-    return pick(summarizeRows(byDate.get(date) ?? []));
-  });
-}
-
 function placeholderCard(title: string, lines: string[]) {
   return (
     <div className="rounded-lg border border-[#ebe9e6] bg-white p-5">
@@ -190,11 +150,6 @@ async function fetchOrdersForExport(filters: DataCenterFilters): Promise<OrderWi
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as OrderWithItems[];
-}
-
-function trendAverage(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function netSalesVariant(today: number, trend: number[]): "default" | "warning" {
@@ -255,6 +210,7 @@ export default function AdminDataCenter() {
   const [tableRows, setTableRows] = useState<TableSalesRow[]>([]);
   const [orGaps, setOrGaps] = useState<OrGapRow[]>([]);
   const [paymentRows, setPaymentRows] = useState<PaymentMixRow[]>([]);
+  const [hourlyRows, setHourlyRows] = useState<HourlySalesRow[]>([]);
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [discrepancies, setDiscrepancies] = useState<DiscrepancyRow[]>([]);
   const [closing, setClosing] = useState<CashClosingRow | null>(null);
@@ -300,6 +256,7 @@ export default function AdminDataCenter() {
       nextTables,
       nextGaps,
       nextPaymentRows,
+      nextHourlyRows,
       nextOrders,
       nextDiscrepancies,
     ] = await Promise.all([
@@ -311,6 +268,7 @@ export default function AdminDataCenter() {
       safeRows(fetchTableSales({ start: normalized.start, end: normalized.end, channel: normalized.channel })),
       safeRows(fetchOrGaps({ start: normalized.start, end: normalized.end })),
       safeRows(fetchPaymentMix({ start: normalized.start, end: normalized.end, channel: normalized.channel })),
+      safeRows(fetchHourlySales({ start: normalized.start, end: normalized.end, channel: normalized.channel })),
       normalized.tab === "export" ? safeRows(fetchOrdersForExport(normalized)) : Promise.resolve([] as OrderWithItems[]),
       normalized.tab === "audit"
         ? safeRows(fetchDiscrepancies({ start: normalized.start, end: normalized.end }))
@@ -325,6 +283,7 @@ export default function AdminDataCenter() {
     setTableRows(nextTables);
     setOrGaps(nextGaps);
     setPaymentRows(nextPaymentRows);
+    setHourlyRows(nextHourlyRows);
     setOrders(nextOrders);
     setDiscrepancies(nextDiscrepancies);
     setGeneratedAt(new Date());
@@ -546,10 +505,7 @@ export default function AdminDataCenter() {
 
         <OrGapPanel gaps={orGaps} />
 
-        <div className="rounded-lg border border-[#ebe9e6] bg-white p-4">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-[#705d48]">Hourly Sales</h2>
-          <p className="mt-3 text-sm text-[#705d48]">Coming in next update.</p>
-        </div>
+        <HourlySalesChart rows={hourlyRows} />
       </div>
     );
   }
