@@ -353,20 +353,12 @@ select
   'Senior/PWD discount applied without a holder name or ID.'
 from completed c
 where coalesce(c.senior_pwd_discount, 0) > 0
-  and (c.senior_pwd_name is null or c.senior_pwd_id is null)
-union all
-select
-  (o.created_at at time zone 'Asia/Manila')::date as business_date,
-  o.id as order_id,
-  o.order_number,
-  o.or_number,
-  o.total_amount,
-  'billed_not_settled'::text,
-  'Ticket printed but order not settled after 24 hours.'::text
-from public.orders o
-where o.status in ('preparing', 'ready')
-  and o.created_at < now() - interval '24 hours'
-  and o.kitchen_ticket_printed_at is not null;
+  and (c.senior_pwd_name is null or c.senior_pwd_id is null);
+
+-- The billed_not_settled finding requires kitchen_ticket_printed_at on orders
+-- (added by 20260619_013_table_ticket_print_status.sql). Apply that migration
+-- first and then re-run a follow up to recreate this view with the extra
+-- union branch.
 
 create or replace function get_discrepancies(
   p_start date,
