@@ -1,10 +1,26 @@
 import { AdminLayout } from "@/components/AdminLayout";
+import { BirPackButton } from "@/components/dataCenter/BirPackButton";
 import { DataCenterShell } from "@/components/dataCenter/DataCenterShell";
+import { DiscrepancyList } from "@/components/dataCenter/DiscrepancyList";
 import { KpiTile } from "@/components/dataCenter/KpiTile";
 import { OrGapPanel } from "@/components/dataCenter/OrGapPanel";
 import { PaymentMixDonut } from "@/components/dataCenter/PaymentMixDonut";
+import { ReconcileForm, type ReconcileEditableField } from "@/components/dataCenter/ReconcileForm";
+import { ReconcileHistory } from "@/components/dataCenter/ReconcileHistory";
 import { TopItemsList } from "@/components/dataCenter/TopItemsList";
+import { ZReadingPrint } from "@/components/dataCenter/ZReadingPrint";
 import { useBusinessSettings } from "@/lib/businessSettings";
+import {
+  addPayout,
+  approveShiftClose,
+  listPayouts,
+  listRecentClosings,
+  removePayout,
+  startShiftClose,
+  submitShiftClose,
+  type CashClosingRow,
+  type PayoutRow,
+} from "@/lib/cashDrawer";
 import { useActiveCashier } from "@/lib/cashier";
 import {
   fetchDailySummary,
@@ -21,6 +37,7 @@ import {
 import { exportCurrentView, type ExportView } from "@/lib/dataCenterExport";
 import { defaultFilters, filtersFromSearch, filtersToSearch, type DataCenterFilters } from "@/lib/dataCenterUrl";
 import { getCustomRange } from "@/lib/dateRanges";
+import { fetchDiscrepancies, type DiscrepancyRow } from "@/lib/discrepancies";
 import { rangeLabel, shiftYmdManila } from "@/lib/manilaDate";
 import { type OrderItemRow, type OrderRow, supabase } from "@/lib/supabase";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -175,6 +192,54 @@ async function fetchOrdersForExport(filters: DataCenterFilters): Promise<OrderWi
   return (data ?? []) as OrderWithItems[];
 }
 
+function trendAverage(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function netSalesVariant(today: number, trend: number[]): "default" | "warning" {
+  const baseline = trendAverage(trend.slice(0, 7));
+  if (baseline <= 0) return "default";
+  return today < baseline * 0.7 ? "warning" : "default";
+}
+
+function ordersVariant(today: number, trend: number[]): "default" | "warning" {
+  const baseline = trendAverage(trend.slice(0, 7));
+  if (baseline <= 0) return "default";
+  return today < baseline * 0.5 ? "warning" : "default";
+}
+
+function cancellationsVariant(cancellations: number, orderCount: number): "default" | "warning" {
+  if (orderCount === 0) return cancellations > 0 ? "warning" : "default";
+  return cancellations / orderCount > 0.05 ? "warning" : "default";
+}
+
+function netSalesHint(today: number, trend: number[]): string | undefined {
+  const baseline = trendAverage(trend.slice(0, 7));
+  if (baseline <= 0) return undefined;
+  if (today < baseline * 0.7) return "Below 7 day average";
+  return undefined;
+}
+
+function ordersHint(today: number, trend: number[]): string | undefined {
+  const baseline = trendAverage(trend.slice(0, 7));
+  if (baseline <= 0) return undefined;
+  if (today < baseline * 0.5) return "Half of 7 day average";
+  return undefined;
+}
+
+function cancellationsHint(cancellations: number, orderCount: number): string | undefined {
+  if (orderCount === 0) return undefined;
+  const rate = cancellations / orderCount;
+  if (rate > 0.05) return `${Math.round(rate * 1000) / 10}% cancellation rate`;
+  return undefined;
+}
+
+function buildFilenameBase(filters: DataCenterFilters): string {
+  const range = filters.start === filters.end ? filters.start : `${filters.start}-to-${filters.end}`;
+  return `saiko-${range}-${filters.channel}-${filters.tab}`;
+}
+
 export default function AdminDataCenter() {
   const [location, setLocation] = useLocation();
   const { activeCashier } = useActiveCashier();
@@ -191,8 +256,15 @@ export default function AdminDataCenter() {
   const [orGaps, setOrGaps] = useState<OrGapRow[]>([]);
   const [paymentRows, setPaymentRows] = useState<PaymentMixRow[]>([]);
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
+  const [discrepancies, setDiscrepancies] = useState<DiscrepancyRow[]>([]);
+  const [closing, setClosing] = useState<CashClosingRow | null>(null);
+  const [payouts, setPayouts] = useState<PayoutRow[]>([]);
+  const [recentClosings, setRecentClosings] = useState<CashClosingRow[]>([]);
+  const [reconcileBusy, setReconcileBusy] = useState(false);
+  const [reconcileMessage, setReconcileMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [generatedAt, setGeneratedAt] = useState(new Date());
+  const [thermalMode, setThermalMode] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -229,6 +301,7 @@ export default function AdminDataCenter() {
       nextGaps,
       nextPaymentRows,
       nextOrders,
+      nextDiscrepancies,
     ] = await Promise.all([
       safeRows(fetchDailySummary({ start: normalized.start, end: normalized.end, channel: normalized.channel, status: normalized.status })),
       safeRows(fetchDailySummary({ start: priorStart, end: priorEnd, channel: normalized.channel, status: normalized.status })),
@@ -239,6 +312,9 @@ export default function AdminDataCenter() {
       safeRows(fetchOrGaps({ start: normalized.start, end: normalized.end })),
       safeRows(fetchPaymentMix({ start: normalized.start, end: normalized.end, channel: normalized.channel })),
       normalized.tab === "export" ? safeRows(fetchOrdersForExport(normalized)) : Promise.resolve([] as OrderWithItems[]),
+      normalized.tab === "audit"
+        ? safeRows(fetchDiscrepancies({ start: normalized.start, end: normalized.end }))
+        : Promise.resolve([] as DiscrepancyRow[]),
     ]);
 
     setSummaryRows(nextSummary);
@@ -250,13 +326,34 @@ export default function AdminDataCenter() {
     setOrGaps(nextGaps);
     setPaymentRows(nextPaymentRows);
     setOrders(nextOrders);
+    setDiscrepancies(nextDiscrepancies);
     setGeneratedAt(new Date());
     setLoading(false);
   }, [filters]);
 
+  const loadReconciliation = useCallback(async () => {
+    if (filters.tab !== "reconcile") return;
+    const date = filters.start;
+    const channel = filters.channel === "web" ? "web" : "counter";
+    const row = await startShiftClose(date, channel);
+    setClosing(row);
+    if (row) {
+      const [payoutRows, history] = await Promise.all([listPayouts(row.id), listRecentClosings(14)]);
+      setPayouts(payoutRows);
+      setRecentClosings(history);
+    } else {
+      setPayouts([]);
+      setRecentClosings(await listRecentClosings(14));
+    }
+  }, [filters.tab, filters.start, filters.channel]);
+
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    void loadReconciliation();
+  }, [loadReconciliation]);
 
   const scopeLabel = useMemo(
     () => `${rangeLabel(filters.start, filters.end)} / ${channelLabels[filters.channel]} / ${statusLabels[filters.status]}`,
@@ -298,25 +395,130 @@ export default function AdminDataCenter() {
     });
   }
 
+  function handleReconcileChange(field: ReconcileEditableField, value: number | string) {
+    setClosing((current) => {
+      if (!current) return current;
+      const next = { ...current };
+      if (field === "notes") {
+        next.notes = typeof value === "string" ? value : String(value);
+      } else if (field === "opening_float") {
+        next.opening_float = Number(value);
+      } else if (field === "counted_cash") {
+        next.counted_cash = Number(value);
+        next.cash_variance = next.counted_cash - next.expected_cash;
+      } else if (field === "actual_gcash") {
+        next.actual_gcash = Number(value);
+        next.gcash_variance = next.actual_gcash - next.expected_gcash;
+      } else if (field === "actual_card") {
+        next.actual_card = Number(value);
+        next.card_variance = next.actual_card - next.expected_card;
+      }
+      return next;
+    });
+  }
+
+  async function handleReconcileSubmit() {
+    if (!closing) return;
+    setReconcileBusy(true);
+    setReconcileMessage(null);
+    const result = await submitShiftClose({
+      id: closing.id,
+      opening_float: closing.opening_float,
+      counted_cash: closing.counted_cash,
+      actual_gcash: closing.actual_gcash,
+      actual_card: closing.actual_card,
+      payouts_total: closing.payouts_total,
+      notes: closing.notes ?? "",
+    });
+    if (result) {
+      setClosing(result);
+      setReconcileMessage("Submitted. Manager can review and approve.");
+      setRecentClosings(await listRecentClosings(14));
+    } else {
+      setReconcileMessage("Submit failed. Check the console for details.");
+    }
+    setReconcileBusy(false);
+  }
+
+  async function handleReconcileApprove() {
+    if (!closing) return;
+    setReconcileBusy(true);
+    setReconcileMessage(null);
+    const result = await approveShiftClose(closing.id);
+    if (result) {
+      setClosing(result);
+      setReconcileMessage("Closing approved.");
+      setRecentClosings(await listRecentClosings(14));
+    } else {
+      setReconcileMessage("Approve failed. Check the console for details.");
+    }
+    setReconcileBusy(false);
+  }
+
+  async function handleAddPayout(label: string, amount: number) {
+    if (!closing) return;
+    setReconcileBusy(true);
+    const row = await addPayout(closing.id, label, amount);
+    if (row) {
+      setPayouts((current) => [...current, row]);
+      setClosing((current) =>
+        current ? { ...current, payouts_total: current.payouts_total + amount } : current,
+      );
+    }
+    setReconcileBusy(false);
+  }
+
+  async function handleRemovePayout(id: string) {
+    if (!closing) return;
+    const removed = payouts.find((payout) => payout.id === id);
+    if (!removed) return;
+    setReconcileBusy(true);
+    const ok = await removePayout(id);
+    if (ok) {
+      setPayouts((current) => current.filter((payout) => payout.id !== id));
+      setClosing((current) =>
+        current ? { ...current, payouts_total: Math.max(0, current.payouts_total - removed.amount) } : current,
+      );
+    }
+    setReconcileBusy(false);
+  }
+
+  function handlePrintZReading() {
+    if (typeof window === "undefined") return;
+    window.print();
+  }
+
   function renderTodayTab() {
+    const todayNet = totals.netSales;
+    const todayOrders = totals.orderCount;
+    const todayCancellations = totals.cancellations;
+    const netVariant = netSalesVariant(todayNet, trends.net);
+    const ordersVariantValue = ordersVariant(todayOrders, trends.orders);
+    const cancellationsVariantValue = cancellationsVariant(todayCancellations, todayOrders);
+    const netSalesHintText = netSalesHint(todayNet, trends.net);
+    const ordersHintText = ordersHint(todayOrders, trends.orders);
+    const cancellationsHintText = cancellationsHint(todayCancellations, todayOrders);
+
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           <KpiTile
             label="Net Sales"
-            value={php(totals.netSales)}
-            hint={`Last week ${php(sameWeekTotals.netSales)}`}
+            value={php(todayNet)}
+            hint={netSalesHintText ?? `Last week ${php(sameWeekTotals.netSales)}`}
             deltaPct={netDelta}
             deltaLabel="vs yesterday"
             trend={trends.net}
+            variant={netVariant}
           />
           <KpiTile
             label="Orders"
-            value={integer(totals.orderCount)}
-            hint={`Last week ${integer(sameWeekTotals.orderCount)}`}
+            value={integer(todayOrders)}
+            hint={ordersHintText ?? `Last week ${integer(sameWeekTotals.orderCount)}`}
             deltaPct={ordersDelta}
             deltaLabel="vs yesterday"
             trend={trends.orders}
+            variant={ordersVariantValue}
           />
           <KpiTile
             label="Average Ticket"
@@ -328,12 +530,12 @@ export default function AdminDataCenter() {
           />
           <KpiTile
             label="Cancellations"
-            value={integer(totals.cancellations)}
-            hint={`Last week ${integer(sameWeekTotals.cancellations)}`}
+            value={integer(todayCancellations)}
+            hint={cancellationsHintText ?? `Last week ${integer(sameWeekTotals.cancellations)}`}
             deltaPct={cancellationsDelta}
             deltaLabel="vs yesterday"
             trend={trends.cancellations}
-            variant={(cancellationsDelta ?? 0) > 0 || totals.cancellations > 0 ? "warning" : "default"}
+            variant={cancellationsVariantValue}
           />
         </div>
 
@@ -352,6 +554,46 @@ export default function AdminDataCenter() {
     );
   }
 
+  function renderReconcileTab() {
+    if (!closing) {
+      return (
+        <div className="rounded-lg border border-[#ebe9e6] bg-white p-5 text-sm text-[#705d48]">
+          Loading drawer close for {filters.start}.
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4 pb-32 md:pb-0">
+        {reconcileMessage && (
+          <div className="rounded-md border border-[#ebe9e6] bg-[#faf8f6] px-4 py-3 text-sm text-[#0d0f13]">
+            {reconcileMessage}
+          </div>
+        )}
+        <ReconcileForm
+          closing={closing}
+          payouts={payouts}
+          busy={reconcileBusy}
+          onChange={handleReconcileChange}
+          onSubmit={handleReconcileSubmit}
+          onApprove={handleReconcileApprove}
+          onAddPayout={handleAddPayout}
+          onRemovePayout={handleRemovePayout}
+        />
+        <ReconcileHistory rows={recentClosings} />
+      </div>
+    );
+  }
+
+  function renderAuditTab() {
+    return (
+      <div className="space-y-4">
+        <OrGapPanel gaps={orGaps} />
+        <DiscrepancyList rows={discrepancies} />
+      </div>
+    );
+  }
+
   function renderExportTab() {
     const views: Array<{ key: ExportView; label: string }> = [
       { key: "summary", label: "Summary" },
@@ -359,23 +601,71 @@ export default function AdminDataCenter() {
       { key: "tables", label: "Tables" },
       { key: "orders", label: "Orders" },
     ];
+    const filenameBase = buildFilenameBase(filters);
 
     return (
-      <div className="rounded-lg border border-[#ebe9e6] bg-white p-5">
-        <h2 className="text-lg font-bold text-[#0d0f13]">Export</h2>
-        <p className="mt-2 text-sm text-[#705d48]">Download the current scope with the same Daily Report CSV columns.</p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {views.map((view) => (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-[#ebe9e6] bg-white p-5">
+          <h2 className="text-lg font-bold text-[#0d0f13]">Print Z-Reading</h2>
+          <p className="mt-2 text-sm text-[#705d48]">
+            Use thermal mode for an 80mm receipt printer. Plain A4 prints from any office printer.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <label className="inline-flex items-center gap-2 text-sm font-bold text-[#0d0f13]">
+              <input
+                type="checkbox"
+                checked={thermalMode}
+                onChange={(event) => setThermalMode(event.target.checked)}
+              />
+              Thermal (80mm)
+            </label>
             <button
-              key={view.key}
               type="button"
-              onClick={() => handleExport(view.key)}
-              disabled={loading}
-              className="min-h-11 rounded-md bg-[#0d0f13] px-4 text-sm font-bold uppercase tracking-wide text-white disabled:opacity-60"
+              onClick={handlePrintZReading}
+              className="min-h-11 rounded-md bg-[#ac312d] px-4 text-sm font-bold uppercase tracking-wide text-white"
             >
-              {view.label}
+              Print Z-Reading
             </button>
-          ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-[#ebe9e6] bg-white p-5">
+          <h2 className="text-lg font-bold text-[#0d0f13]">CSV Export</h2>
+          <p className="mt-2 text-sm text-[#705d48]">Same column layout as the legacy Daily Report exports.</p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {views.map((view) => (
+              <button
+                key={view.key}
+                type="button"
+                onClick={() => handleExport(view.key)}
+                disabled={loading}
+                className="min-h-11 rounded-md bg-[#0d0f13] px-4 text-sm font-bold uppercase tracking-wide text-white disabled:opacity-60"
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-[#ebe9e6] bg-white p-5">
+          <h2 className="text-lg font-bold text-[#0d0f13]">BIR Pack</h2>
+          <p className="mt-2 text-sm text-[#705d48]">
+            One file with six labelled sections: summary, payment mix, products, tables, drawer close, payouts.
+          </p>
+          <div className="mt-4">
+            <BirPackButton
+              summary={summaryRows}
+              productRows={productRows}
+              tableRows={tableRows}
+              paymentMix={paymentRows}
+              closing={closing}
+              payouts={payouts}
+              scopeLabel={scopeLabel}
+              rangeLabel={rangeLabel(filters.start, filters.end)}
+              filenameBase={filenameBase}
+              disabled={loading}
+            />
+          </div>
         </div>
       </div>
     );
@@ -389,19 +679,8 @@ export default function AdminDataCenter() {
       ]);
     }
 
-    if (filters.tab === "reconcile") {
-      return placeholderCard("Reconciliation", ["Drawer close, GCash actual, and card terminal variance land in Run 3."]);
-    }
-
-    if (filters.tab === "audit") {
-      return (
-        <div className="space-y-4">
-          <OrGapPanel gaps={orGaps} />
-          {placeholderCard("Audit", ["Discrepancy checks (missing OR, VAT mismatches, holders missing) land in Run 3."])}
-        </div>
-      );
-    }
-
+    if (filters.tab === "reconcile") return renderReconcileTab();
+    if (filters.tab === "audit") return renderAuditTab();
     if (filters.tab === "export") return renderExportTab();
     return renderTodayTab();
   }
@@ -419,6 +698,34 @@ export default function AdminDataCenter() {
       >
         {renderActiveTab()}
       </DataCenterShell>
+
+      <div className="data-center-print" aria-hidden>
+        <ZReadingPrint
+          scope={scopeLabel}
+          rangeLabel={rangeLabel(filters.start, filters.end)}
+          generatedAt={generatedAt}
+          business={{
+            name: settings?.business_name ?? "SAIKO RAMEN & SUSHI",
+            tin: settings?.business_tin ?? null,
+            address: settings?.business_address ?? null,
+          }}
+          summary={summaryRows}
+          paymentMix={paymentRows}
+          productRows={productRows}
+          tableRows={tableRows}
+          closing={closing}
+          payouts={payouts}
+          thermalMode={thermalMode}
+        />
+      </div>
+      <style>{`
+        .data-center-print { display: none; }
+        @media print {
+          body > * { visibility: hidden !important; }
+          .data-center-print, .data-center-print * { visibility: visible !important; }
+          .data-center-print { position: absolute; left: 0; top: 0; right: 0; display: block !important; }
+        }
+      `}</style>
     </AdminLayout>
   );
 }
