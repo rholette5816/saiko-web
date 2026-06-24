@@ -199,18 +199,25 @@ export default function AdminOrders() {
       return <span className="text-xs font-semibold text-[#705d48]">No routed items</span>;
     }
 
+    const orderIsClosed = order.status === "completed" || order.status === "cancelled";
+
     return (
       <div className="flex flex-wrap gap-1.5">
         {requiredKinds.map((kind) => {
           const status = getTicketStatus(order, kind);
-          const done = !!status.printedAt;
+          const done = orderIsClosed || !!status.printedAt;
+          const titleText = status.printedAt
+            ? `${ticketKindLabel(kind)} submitted ${formatTicketTime(status.printedAt)}`
+            : orderIsClosed
+              ? `${ticketKindLabel(kind)} implicitly done (order ${order.status})`
+              : `${ticketKindLabel(kind)} pending`;
           return (
             <span
               key={`${order.id}-${kind}`}
               className={`inline-flex items-center rounded-full px-2 py-1 text-[11px] font-bold ${
                 done ? "bg-[#2d7a3e]/10 text-[#2d7a3e]" : "bg-[#ac312d]/10 text-[#ac312d]"
               }`}
-              title={status.printedAt ? `${ticketKindLabel(kind)} submitted ${formatTicketTime(status.printedAt)}` : `${ticketKindLabel(kind)} pending`}
+              title={titleText}
             >
               {ticketKindLabel(kind)}: {done ? "Done" : "Pending"}
             </span>
