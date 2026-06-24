@@ -82,6 +82,7 @@ export default function AdminBacklog() {
   const [menuCategories, setMenuCategories] = useState<MenuCategory[]>([]);
   const [menuLoading, setMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState<string | null>(null);
+  const [menuSearch, setMenuSearch] = useState("");
 
   const [recent, setRecent] = useState<BacklogEntryRow[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
@@ -117,20 +118,35 @@ export default function AdminBacklog() {
   );
 
   const allMenuItems = useMemo(() => {
-    const list: { id: string; label: string; price: number }[] = [];
+    const list: { id: string; label: string; name: string; category: string; price: number }[] = [];
     for (const category of menuCategories) {
       for (const item of category.items) {
-        list.push({ id: item.id, label: `${category.name} / ${item.name}`, price: item.price });
+        list.push({
+          id: item.id,
+          label: `${category.name} / ${item.name}`,
+          name: item.name,
+          category: category.name,
+          price: item.price,
+        });
       }
     }
     return list;
   }, [menuCategories]);
+
+  const filteredMenuItems = useMemo(() => {
+    const query = menuSearch.trim().toLowerCase();
+    if (!query) return allMenuItems.slice(0, 20);
+    return allMenuItems
+      .filter((entry) => entry.name.toLowerCase().includes(query) || entry.category.toLowerCase().includes(query))
+      .slice(0, 30);
+  }, [allMenuItems, menuSearch]);
 
   function resetForms() {
     setQuickTotal("");
     setItems([]);
     setReason("");
     setNotes("");
+    setMenuSearch("");
   }
 
   function addItemRow(menuItem?: MenuItem) {
@@ -146,14 +162,24 @@ export default function AdminBacklog() {
     ]);
   }
 
-  function updateItem(key: string, patch: Partial<ItemizedRow>) {
-    setItems((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  function addItemFromMenu(menuId: string) {
+    const entry = allMenuItems.find((row) => row.id === menuId);
+    if (!entry) return;
+    const existing = items.find((row) => row.itemId === entry.id);
+    if (existing) {
+      updateItem(existing.key, { quantity: existing.quantity + 1 });
+      setMenuSearch("");
+      return;
+    }
+    setItems((current) => [
+      ...current,
+      { key: newKey(), itemId: entry.id, itemName: entry.name, unitPrice: entry.price, quantity: 1 },
+    ]);
+    setMenuSearch("");
   }
 
-  function selectItemFromMenu(key: string, menuId: string) {
-    const menuItem = allMenuItems.find((entry) => entry.id === menuId);
-    if (!menuItem) return;
-    updateItem(key, { itemId: menuItem.id, itemName: menuItem.label.split(" / ").pop() ?? menuItem.label, unitPrice: menuItem.price });
+  function updateItem(key: string, patch: Partial<ItemizedRow>) {
+    setItems((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   }
 
   function removeItem(key: string) {
@@ -395,9 +421,51 @@ export default function AdminBacklog() {
             <div className="space-y-3">
               {menuLoading && <p className="text-sm text-[#705d48]">Loading menu...</p>}
               {menuError && <p className="text-sm text-[#ac312d]">Menu failed to load: {menuError}</p>}
+
+              <div className="rounded-md border border-[#ebe9e6] bg-[#faf8f6] p-3">
+                <label className="block">
+                  <span className="text-xs font-bold uppercase tracking-wide text-[#705d48]">Search menu</span>
+                  <input
+                    type="search"
+                    value={menuSearch}
+                    onChange={(event) => setMenuSearch(event.target.value)}
+                    disabled={busy || allMenuItems.length === 0}
+                    placeholder="Type item or category, e.g. ramen, gyoza, drinks"
+                    className="mt-1 block w-full min-h-11 rounded-md border border-[#d8d2cb] bg-white px-3 text-sm text-[#0d0f13]"
+                  />
+                </label>
+                {filteredMenuItems.length === 0 ? (
+                  <p className="mt-2 text-xs text-[#705d48]">
+                    {allMenuItems.length === 0 ? "No menu items available." : "No matches. Try a different keyword."}
+                  </p>
+                ) : (
+                  <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">
+                    {filteredMenuItems.map((entry) => (
+                      <li key={entry.id}>
+                        <button
+                          type="button"
+                          onClick={() => addItemFromMenu(entry.id)}
+                          disabled={busy}
+                          className="flex w-full items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-left text-sm text-[#0d0f13] hover:bg-[#ebe9e6] disabled:opacity-50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block font-bold">{entry.name}</span>
+                            <span className="block text-xs text-[#705d48]">{entry.category}</span>
+                          </span>
+                          <span className="shrink-0 text-sm font-bold text-[#0d0f13]">{php(entry.price)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-2 text-[11px] text-[#705d48]">
+                  Tap a result to add. Tapping again increases the quantity.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 {items.length === 0 && (
-                  <p className="text-sm text-[#705d48]">No line items yet. Use "Add line" to start.</p>
+                  <p className="text-sm text-[#705d48]">No line items yet. Search above or use "Add custom line".</p>
                 )}
                 {items.map((row) => (
                   <div
@@ -405,26 +473,13 @@ export default function AdminBacklog() {
                     className="grid gap-2 rounded-md border border-[#ebe9e6] p-3 sm:grid-cols-[2fr_120px_100px_auto]"
                   >
                     <div>
-                      <select
-                        value={row.itemId}
-                        onChange={(event) => selectItemFromMenu(row.key, event.target.value)}
-                        disabled={busy || allMenuItems.length === 0}
-                        className="block w-full min-h-11 rounded-md border border-[#d8d2cb] px-2 text-sm text-[#0d0f13]"
-                      >
-                        <option value={row.itemId}>{row.itemName || "Pick from menu"}</option>
-                        {allMenuItems.map((entry) => (
-                          <option key={entry.id} value={entry.id}>
-                            {entry.label} ({php(entry.price)})
-                          </option>
-                        ))}
-                      </select>
                       <input
                         type="text"
                         value={row.itemName}
                         onChange={(event) => updateItem(row.key, { itemName: event.target.value })}
                         disabled={busy}
                         placeholder="Item name"
-                        className="mt-1 block w-full min-h-11 rounded-md border border-[#d8d2cb] px-2 text-sm text-[#0d0f13]"
+                        className="block w-full min-h-11 rounded-md border border-[#d8d2cb] px-2 text-sm text-[#0d0f13]"
                       />
                     </div>
                     <label className="block">
@@ -472,7 +527,7 @@ export default function AdminBacklog() {
                   disabled={busy}
                   className="min-h-11 rounded-md border border-[#0d0f13] px-4 text-sm font-bold uppercase tracking-wide text-[#0d0f13] disabled:opacity-50"
                 >
-                  Add line
+                  Add custom line
                 </button>
                 <p className="text-base font-bold text-[#0d0f13]">Subtotal: {php(itemizedSubtotal)}</p>
               </div>
