@@ -29,6 +29,7 @@ import AdminTableOrder from "./pages/admin/TableOrder";
 import AdminSettings from "./pages/admin/Settings";
 import AdminDailyReport from "./pages/admin/DailyReport";
 import AdminDataCenter from "./pages/admin/DataCenter";
+import AdminBacklog from "./pages/admin/Backlog";
 import AdminHelp from "./pages/admin/Help";
 
 function ScrollToTop() {
@@ -100,6 +101,11 @@ function Router() {
         <Route path={"/admin/data-center"}>
           <AdminGuard adminOnly>
             <AdminDataCenter />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/backlog"}>
+          <AdminGuard adminOnly>
+            <AdminBacklog />
           </AdminGuard>
         </Route>
         <Route path={"/admin/products"}>

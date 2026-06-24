@@ -12,7 +12,7 @@ import {
 } from "@/lib/orderTickets";
 import { supabase } from "@/lib/supabase";
 import logo from "@/assets/logo.png";
-import { BarChart3, Bell, BookOpen, Calculator, LayoutDashboard, LayoutGrid, ListOrdered, LogOut, Package, Settings, Tag, Volume2, VolumeX, Wifi, WifiOff, X } from "lucide-react";
+import { BarChart3, Bell, BookOpen, Calculator, History, LayoutDashboard, LayoutGrid, ListOrdered, LogOut, Package, Settings, Tag, Volume2, VolumeX, Wifi, WifiOff, X } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
@@ -113,6 +113,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       { href: "/admin/counter", label: "Counter", icon: Calculator, active: (path: string) => path.startsWith("/admin/counter") },
       { href: "/admin/tables", label: "Tables", icon: LayoutGrid, active: (path: string) => path.startsWith("/admin/tables") },
       { href: "/admin/data-center", label: "Data Center", icon: BarChart3, active: (path: string) => path.startsWith("/admin/data-center") },
+      { href: "/admin/backlog", label: "Backlog", icon: History, active: (path: string) => path.startsWith("/admin/backlog") },
       { href: "/admin/products", label: "Products", icon: Package, active: (path: string) => path.startsWith("/admin/products") },
       { href: "/admin/promos", label: "Promos", icon: Tag, active: (path: string) => path.startsWith("/admin/promos") },
       { href: "/admin/settings", label: "Settings", icon: Settings, active: (path: string) => path.startsWith("/admin/settings") },
