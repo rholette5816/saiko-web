@@ -1,5 +1,33 @@
 export type HolderType = "senior" | "pwd";
 
+export type DiscountType = "none" | "senior" | "pwd" | "employee" | "family" | "custom";
+
+export const DISCOUNT_TYPE_LABELS: Record<DiscountType, string> = {
+  none: "None",
+  senior: "Senior Citizen",
+  pwd: "PWD",
+  employee: "Employee",
+  family: "Family",
+  custom: "Custom",
+};
+
+export const DISCOUNT_TYPE_GUIDE_PCT: Record<DiscountType, number> = {
+  none: 0,
+  senior: 20,
+  pwd: 20,
+  employee: 10,
+  family: 15,
+  custom: 0,
+};
+
+export function requiresHolderId(discountType: DiscountType): boolean {
+  return discountType === "senior" || discountType === "pwd";
+}
+
+export function isFlatDiscountType(discountType: DiscountType): boolean {
+  return discountType === "employee" || discountType === "family" || discountType === "custom";
+}
+
 export interface DiscountAllocation {
   holderRef: string;
   holderType: HolderType;
@@ -65,6 +93,14 @@ export function createDiscountHolderDraft(): DiscountHolderDraft {
     discountRate: "20",
     allocations: {},
   };
+}
+
+export function wholeBillAllocations(items: DiscountableBillItem[]): Record<string, string> {
+  const allocations: Record<string, string> = {};
+  items.forEach((item) => {
+    allocations[item.orderItemId] = String(item.quantity);
+  });
+  return allocations;
 }
 
 function round2(value: number): number {
@@ -177,5 +213,31 @@ export function computeDiscountPreview(
     vatableSales,
     vatAmount,
     total,
+  };
+}
+
+export function computeFlatDiscountPreview(
+  subtotal: number,
+  pct: string,
+  vatRegistered: boolean,
+  vatRate: number,
+): DiscountPreview {
+  const discountAmount = round2(subtotal * (clampRate(pct) / 100));
+  const regularGross = round2(Math.max(0, subtotal - discountAmount));
+  const vatAmount = vatRegistered && vatRate > 0 ? round2((regularGross * vatRate) / (100 + vatRate)) : 0;
+  const vatableSales = vatRegistered && vatRate > 0 ? round2(regularGross - vatAmount) : 0;
+
+  return {
+    lines: [],
+    errors: [],
+    discountGross: 0,
+    vatRemovedAmount: 0,
+    vatExemptSales: 0,
+    discountAmount,
+    discountedNet: 0,
+    regularGross,
+    vatableSales,
+    vatAmount,
+    total: regularGross,
   };
 }

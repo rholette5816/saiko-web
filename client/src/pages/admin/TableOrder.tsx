@@ -6,10 +6,17 @@ import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
 import {
   computeDiscountPreview,
+  computeFlatDiscountPreview,
   createDiscountHolderDraft,
+  DISCOUNT_TYPE_GUIDE_PCT,
+  DISCOUNT_TYPE_LABELS,
+  isFlatDiscountType,
+  requiresHolderId,
+  wholeBillAllocations,
   type DiscountHolderDraft,
   type DiscountPreviewLine,
   type DiscountableBillItem,
+  type DiscountType,
   type HolderType,
 } from "@/lib/discountAllocations";
 import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
@@ -199,6 +206,8 @@ interface BillPayload {
   seniorPwd: boolean;
   seniorPwdId?: string | null;
   seniorPwdName?: string | null;
+  discountType: DiscountType;
+  discountPct: number;
   discounts: BillDiscountLine[];
   settings: BusinessSettings;
   isFinal: boolean;
@@ -345,7 +354,13 @@ function ticketKindLabel(kind: TicketKind): string {
   return kind === "kitchen" ? "Kitchen" : "Bar";
 }
 
-function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSettings): BillPayload {
+function parseBillPayload(
+  data: unknown,
+  table: TableDef,
+  settings: BusinessSettings,
+  discountType: DiscountType,
+  discountPct: number,
+): BillPayload {
   const raw = (data ?? {}) as CloseTableBillResponse;
   const rounds = Array.isArray(raw.rounds)
     ? raw.rounds.map((round) => ({
@@ -404,6 +419,8 @@ function parseBillPayload(data: unknown, table: TableDef, settings: BusinessSett
     seniorPwd: Boolean(raw.senior_pwd) || discounts.length > 0,
     seniorPwdId: raw.senior_pwd_id ?? null,
     seniorPwdName: raw.senior_pwd_name ?? null,
+    discountType,
+    discountPct,
     discounts,
     settings,
     isFinal: true,
@@ -446,6 +463,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     paymentReference: "",
   });
   const [discountHolders, setDiscountHolders] = useState<DiscountHolderDraft[]>([]);
+  const [discountType, setDiscountType] = useState<DiscountType>("none");
+  const [discountPct, setDiscountPct] = useState<string>("0");
+  const [discountIdNumber, setDiscountIdNumber] = useState("");
+  const [discountHolderName, setDiscountHolderName] = useState("");
+  const [splitDiscount, setSplitDiscount] = useState(false);
   const [printingBill, setPrintingBill] = useState<BillPayload | null>(null);
   const [cancelRound, setCancelRound] = useState<RoundWithItems | null>(null);
   const [cancelReason, setCancelReason] = useState("Cancelled by staff");
@@ -567,14 +589,35 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       openRounds[0].created_at)
     : null;
 
+  useEffect(() => {
+    if (discountType === "none" || isFlatDiscountType(discountType) || splitDiscount) return;
+    setDiscountHolders([
+      {
+        id: "whole-bill",
+        holderType: discountType as HolderType,
+        holderName: discountHolderName,
+        holderIdNumber: discountIdNumber,
+        discountRate: discountPct,
+        allocations: wholeBillAllocations(discountableBillItems),
+      },
+    ]);
+  }, [discountType, discountPct, discountIdNumber, discountHolderName, splitDiscount, discountableBillItems]);
+
   const billPreview = useMemo(() => {
-    const preview = computeDiscountPreview(
-      discountableBillItems,
-      discountHolders,
-      runningSubtotal,
-      Boolean(resolvedSettings.vat_registered),
-      Number(resolvedSettings.vat_rate ?? 12),
-    );
+    const preview = isFlatDiscountType(discountType)
+      ? computeFlatDiscountPreview(
+          runningSubtotal,
+          discountPct,
+          Boolean(resolvedSettings.vat_registered),
+          Number(resolvedSettings.vat_rate ?? 12),
+        )
+      : computeDiscountPreview(
+          discountableBillItems,
+          discountType === "none" ? [] : discountHolders,
+          runningSubtotal,
+          Boolean(resolvedSettings.vat_registered),
+          Number(resolvedSettings.vat_rate ?? 12),
+        );
     const amountReceived = closeForm.paymentMethod === "cash" ? Number(closeForm.cashReceived || 0) : preview.total;
     return {
       ...preview,
@@ -584,6 +627,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   }, [
     closeForm.cashReceived,
     closeForm.paymentMethod,
+    discountType,
+    discountPct,
     discountHolders,
     discountableBillItems,
     resolvedSettings.vat_rate,
@@ -642,6 +687,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       seniorPwd: billPreview.lines.length > 0,
       seniorPwdId: Array.from(new Set(billPreview.lines.map((line) => line.holderIdNumber).filter(Boolean))).join(", ") || null,
       seniorPwdName: Array.from(new Set(billPreview.lines.map((line) => line.holderName).filter(Boolean))).join(", ") || null,
+      discountType,
+      discountPct: Number(discountPct || 0),
       discounts: billPreview.lines,
       settings: resolvedSettings,
       isFinal,
@@ -689,29 +736,134 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       }),
     );
   }
+  function selectDiscountType(type: DiscountType) {
+    setDiscountType(type);
+    setDiscountPct(String(DISCOUNT_TYPE_GUIDE_PCT[type]));
+    setDiscountIdNumber("");
+    setDiscountHolderName("");
+    setSplitDiscount(false);
+  }
+
+  function enableSplitDiscount() {
+    setDiscountHolders((current) => {
+      const seed = current[0];
+      return [
+        {
+          id: seed && seed.id !== "whole-bill" ? seed.id : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          holderType: discountType as HolderType,
+          holderName: discountHolderName,
+          holderIdNumber: discountIdNumber,
+          discountRate: discountPct,
+          allocations: seed?.allocations ?? {},
+        },
+      ];
+    });
+    setSplitDiscount(true);
+  }
+
   function renderDiscountPanel() {
+    const needsId = requiresHolderId(discountType);
+
     return (
-      <div className="rounded-lg border border-[#d8d2cb] p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-sm font-bold text-[#0d0f13]">Senior/PWD IDs</p>
-            <p className="text-xs font-semibold text-[#705d48]">Item-level discounts</p>
-          </div>
-          <button
-            type="button"
-            onClick={addDiscountHolder}
-            className="inline-flex h-9 items-center justify-center rounded-lg bg-[#0d0f13] px-3 text-xs font-bold uppercase tracking-wide text-white"
-          >
-            Add ID
-          </button>
+      <div className="rounded-lg border border-[#d8d2cb] p-3 space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Discount</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {(["none", "senior", "pwd", "employee", "family", "custom"] as DiscountType[]).map((type) => (
+            <label
+              key={type}
+              className={`rounded-lg border px-2 py-2 text-center text-xs font-semibold cursor-pointer ${
+                discountType === type
+                  ? "border-[#c08643] bg-[#c08643] text-white"
+                  : "border-[#d8d2cb] text-[#0d0f13]"
+              }`}
+            >
+              <input
+                type="radio"
+                className="sr-only"
+                name="table-discount-type"
+                value={type}
+                checked={discountType === type}
+                onChange={() => selectDiscountType(type)}
+              />
+              {DISCOUNT_TYPE_LABELS[type]}
+            </label>
+          ))}
         </div>
 
-        {discountHolders.length === 0 ? (
-          <p className="mt-3 rounded-lg bg-[#f6f2ed] px-3 py-2 text-sm font-semibold text-[#705d48]">
-            No Senior/PWD IDs applied.
-          </p>
-        ) : (
-          <div className="mt-3 space-y-3">
+        {discountType !== "none" && !splitDiscount && (
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Discount %</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={discountPct}
+                onChange={(event) => setDiscountPct(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-2.5 py-2 text-sm"
+              />
+            </div>
+
+            {needsId && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">ID Number</label>
+                  <input
+                    type="text"
+                    value={discountIdNumber}
+                    onChange={(event) => setDiscountIdNumber(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm"
+                    placeholder="Required"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Full Name</label>
+                  <input
+                    type="text"
+                    value={discountHolderName}
+                    onChange={(event) => setDiscountHolderName(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm"
+                    placeholder="Required"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {needsId && !splitDiscount && (
+          <button
+            type="button"
+            onClick={enableSplitDiscount}
+            className="text-xs font-semibold uppercase tracking-wide text-[#c08643] underline"
+          >
+            Split between multiple IDs or specific items
+          </button>
+        )}
+
+        {needsId && splitDiscount && (
+          <div className="space-y-3 rounded-lg border border-dashed border-[#d8d2cb] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Split by ID / item</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={addDiscountHolder}
+                  className="inline-flex h-8 items-center justify-center rounded-lg bg-[#0d0f13] px-3 text-xs font-bold uppercase tracking-wide text-white"
+                >
+                  Add ID
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSplitDiscount(false)}
+                  className="inline-flex h-8 items-center justify-center rounded-lg border border-[#d8d2cb] px-3 text-xs font-bold uppercase tracking-wide text-[#0d0f13]"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+
             {discountHolders.map((holder, holderIndex) => (
               <div key={holder.id} className="rounded-lg border border-[#d8d2cb] bg-[#fbfaf8] p-3">
                 <div className="mb-3 flex items-start justify-between gap-2">
@@ -800,7 +952,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         )}
 
         {billPreview.errors.length > 0 && (
-          <div className="mt-3 space-y-1 rounded-lg border border-[#ac312d]/30 bg-[#ac312d]/5 p-2">
+          <div className="space-y-1 rounded-lg border border-[#ac312d]/30 bg-[#ac312d]/5 p-2">
             {billPreview.errors.map((previewError) => (
               <p key={previewError} className="text-xs font-semibold text-[#ac312d]">
                 {previewError}
@@ -833,7 +985,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         )}
         {billPreview.discountAmount > 0 && (
           <div className="flex justify-between gap-3">
-            <span className="text-[#705d48]">Senior/PWD Discount</span>
+            <span className="text-[#705d48]">{DISCOUNT_TYPE_LABELS[discountType]} Discount</span>
             <span className="font-semibold text-[#2d7a3e]">-{currencyPhp(billPreview.discountAmount)}</span>
           </div>
         )}
@@ -1181,6 +1333,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setExpandedRounds((current) => new Set(current).add(row.round_id));
     setSubmittingRound(false);
     setDiscountHolders([]);
+    setDiscountType("none");
+    setDiscountPct("0");
+    setDiscountIdNumber("");
+    setDiscountHolderName("");
+    setSplitDiscount(false);
     await loadRounds();
   }
 
@@ -1229,6 +1386,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setNotes("");
     setSubmittingRound(false);
     setDiscountHolders([]);
+    setDiscountType("none");
+    setDiscountPct("0");
+    setDiscountIdNumber("");
+    setDiscountHolderName("");
+    setSplitDiscount(false);
     await loadRounds();
   }
 
@@ -1556,6 +1718,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       p_amount_received: amountReceived,
       p_discount_allocations: buildDiscountAllocationPayload(),
       p_payment_reference: closeForm.paymentMethod === "cash" ? null : paymentReference,
+      p_flat_discount_pct: isFlatDiscountType(discountType) ? Number(discountPct || 0) : 0,
     });
 
     if (rpcError) {
@@ -1564,7 +1727,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       return;
     }
 
-    setPrintingBill(parseBillPayload(data, table, resolvedSettings));
+    setPrintingBill(parseBillPayload(data, table, resolvedSettings, discountType, Number(discountPct || 0)));
     setShowCloseModal(false);
     setClosing(false);
   }
@@ -2542,6 +2705,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
               seniorPwd={printingBill.seniorPwd}
               seniorPwdId={printingBill.seniorPwdId}
               seniorPwdName={printingBill.seniorPwdName}
+              discountType={printingBill.discountType}
+              discountPct={printingBill.discountPct}
               discounts={printingBill.discounts}
               settings={printingBill.settings}
               cashierName={cashierName}

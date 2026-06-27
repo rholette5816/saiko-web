@@ -1,3 +1,4 @@
+import { DISCOUNT_TYPE_LABELS, requiresHolderId, type DiscountType } from "@/lib/discountAllocations";
 import { paymentMethodShortLabel } from "@/lib/paymentMethods";
 import type { BusinessSettings } from "@/lib/supabase";
 import type { TableDef } from "@/lib/tables";
@@ -50,6 +51,8 @@ interface TableBillProps {
   seniorPwd: boolean;
   seniorPwdId?: string | null;
   seniorPwdName?: string | null;
+  discountType?: DiscountType | string;
+  discountPct?: number;
   discounts?: BillDiscountLine[];
   settings: BusinessSettings;
   cashierName?: string | null;
@@ -173,7 +176,10 @@ export function TableBill(props: TableBillProps) {
   const itemCount = combinedItems.reduce((total, item) => total + item.quantity, 0);
   const discountLines = props.discounts ?? [];
   const discountHolders = groupDiscounts(discountLines);
-  const hasDiscounts = discountLines.length > 0 || props.seniorPwd;
+  const hasDiscounts = discountLines.length > 0 || props.seniorPwd || props.seniorDiscount > 0;
+  const billDiscountType = (props.discountType || "senior") as DiscountType;
+  const billDiscountLabel = DISCOUNT_TYPE_LABELS[billDiscountType] ?? "Discount";
+  const billDiscountNeedsId = requiresHolderId(billDiscountType);
 
   return (
     <div className="table-bill">
@@ -314,7 +320,7 @@ export function TableBill(props: TableBillProps) {
       )}
       {hasDiscounts && props.seniorDiscount > 0 && (
         <div className="row">
-          <span>Senior/PWD Disc.</span>
+          <span>{billDiscountLabel} Disc.</span>
           <span className="value">-{money(props.seniorDiscount)}</span>
         </div>
       )}
@@ -384,11 +390,13 @@ export function TableBill(props: TableBillProps) {
                 ))}
               </div>
             ))
-          ) : (
+          ) : billDiscountNeedsId ? (
             <>
               <div>ID Number: {props.seniorPwdId || "N/A"}</div>
               <div>Full Name: {props.seniorPwdName || "N/A"}</div>
             </>
+          ) : (
+            <div>Rate: {formatPercent(props.discountPct ?? 0)}%</div>
           )}
         </>
       )}
