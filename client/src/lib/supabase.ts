@@ -28,6 +28,8 @@ export interface OrderRow {
   subtotal?: number | null;
   discount_amount?: number | null;
   channel?: "web" | "counter" | null;
+  service_type?: "dine-in" | "takeout" | null;
+  takeout_charge?: number | null;
   table_number?: string | null;
   payment_method?: string | null;
   payment_reference?: string | null;

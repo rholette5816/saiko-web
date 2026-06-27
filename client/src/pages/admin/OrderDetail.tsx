@@ -1,5 +1,7 @@
 import { AdminLayout } from "@/components/AdminLayout";
+import { useBusinessSettings } from "@/lib/businessSettings";
 import { cleanOrderNotes } from "@/lib/orderTickets";
+import { computeVatSplit, round2 } from "@/lib/orderTotals";
 import { supabase } from "@/lib/supabase";
 import { Phone, Smartphone, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -22,6 +24,9 @@ interface OrderWithItems {
   promo_code?: string | null;
   subtotal?: number | string | null;
   discount_amount?: number | string | null;
+  channel?: string | null;
+  service_type?: string | null;
+  takeout_charge?: number | string | null;
   created_at: string;
   order_items: Array<{
     id: string;
@@ -66,12 +71,15 @@ function buildReadyMessage(order: OrderWithItems): string {
 }
 
 export default function AdminOrderDetail({ id }: { id: string }) {
+  const { settings: businessSettings } = useBusinessSettings();
   const [order, setOrder] = useState<OrderWithItems | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingStatus, setSavingStatus] = useState<OrderStatus | null>(null);
   const [readyModalOpen, setReadyModalOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [takeoutChargeInput, setTakeoutChargeInput] = useState("");
+  const [savingTakeoutCharge, setSavingTakeoutCharge] = useState(false);
 
   async function fetchOrder() {
     setLoading(true);
@@ -93,6 +101,10 @@ export default function AdminOrderDetail({ id }: { id: string }) {
   useEffect(() => {
     fetchOrder();
   }, [id]);
+
+  useEffect(() => {
+    setTakeoutChargeInput(order ? String(order.takeout_charge ?? "") : "");
+  }, [order?.id, order?.takeout_charge]);
 
   useEffect(() => {
     if (!notice) return;
@@ -128,6 +140,34 @@ export default function AdminOrderDetail({ id }: { id: string }) {
     }
 
     setSavingStatus(null);
+    await fetchOrder();
+  }
+
+  async function applyTakeoutCharge() {
+    if (!order) return;
+    const charge = round2(Number(takeoutChargeInput) || 0);
+    const base = round2(Number(order.total_amount || 0) - Number(order.takeout_charge || 0) + charge);
+    const split = computeVatSplit(base, !!businessSettings?.vat_registered, businessSettings?.vat_rate ?? 12);
+
+    setSavingTakeoutCharge(true);
+    setError(null);
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        takeout_charge: charge,
+        total_amount: split.total,
+        vatable_sales: split.vatableSales,
+        vat_amount: split.vatAmount,
+        vat_exempt_sales: split.vatExemptSales,
+      })
+      .eq("id", id);
+    setSavingTakeoutCharge(false);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setNotice("Take-out charge updated.");
     await fetchOrder();
   }
 
@@ -263,6 +303,37 @@ export default function AdminOrderDetail({ id }: { id: string }) {
                 <p className="text-lg font-bold text-[#0d0f13]">Total: {currencyPhp(total)}</p>
               </div>
             </div>
+
+            {(order.channel === "web" || order.service_type === "takeout") && (
+              <div className="bg-white rounded-lg p-4">
+                <h2 className="font-semibold text-[#0d0f13] mb-3">Take-out Charge</h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-[#705d48]">PHP</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={takeoutChargeInput}
+                    onChange={(event) => setTakeoutChargeInput(event.target.value)}
+                    placeholder="0.00"
+                    className="w-28 rounded-md border border-[#d8d2cb] px-2 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyTakeoutCharge}
+                    disabled={savingTakeoutCharge}
+                    className="rounded-md bg-[#0d0f13] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white disabled:opacity-60"
+                  >
+                    {savingTakeoutCharge ? "Saving" : "Apply"}
+                  </button>
+                </div>
+                {Number(order.takeout_charge ?? 0) > 0 && (
+                  <p className="mt-2 text-xs text-[#2d7a3e]">
+                    Current charge: {currencyPhp(Number(order.takeout_charge))}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="bg-white rounded-lg p-4">
               <h2 className="font-semibold text-[#0d0f13] mb-3">Update Status</h2>

@@ -5,6 +5,7 @@ import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
 import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
 import { composeOrderTicketNotes, getTicketStatus, parseOrderTicketNotes } from "@/lib/orderTickets";
+import { computeVatSplit } from "@/lib/orderTotals";
 import { paymentMethodOptions, paymentMethodShortLabel, type PaymentMethod } from "@/lib/paymentMethods";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { Minus, Plus, Search, Trash2, X } from "lucide-react";
@@ -63,6 +64,7 @@ interface CompletedOrder {
   discountIdNumber: string | null;
   discountHolderName: string | null;
   serviceType: CounterServiceType;
+  takeoutCharge: number;
   kitchenTicketPrintedAt: Date | null;
   kitchenTicketPrintCount: number;
   barTicketPrintedAt: Date | null;
@@ -121,6 +123,26 @@ function serviceLabel(type: CounterServiceType): string {
   return type === "dine-in" ? "DINE IN" : "TAKEOUT / PICKUP";
 }
 
+function computePricing(
+  itemsSubtotal: number,
+  discount: DiscountType,
+  discountPct: number,
+  vatRegistered: boolean,
+  vatRate: number,
+) {
+  const discountAmount = discount !== "none" ? round2((itemsSubtotal * discountPct) / 100) : 0;
+  const isVatExempt = discount === "senior" || discount === "pwd";
+
+  if (isVatExempt) {
+    const vatExemptSales = round2(itemsSubtotal - discountAmount);
+    return { discountAmount, vatableSales: 0, vatAmount: 0, vatExemptSales, total: vatExemptSales };
+  }
+
+  const base = round2(itemsSubtotal - discountAmount);
+  const split = computeVatSplit(base, vatRegistered, vatRate);
+  return { discountAmount, ...split };
+}
+
 function formatTicketTime(value: Date): string {
   return value.toLocaleTimeString("en-PH", {
     timeZone: "Asia/Manila",
@@ -148,6 +170,8 @@ export default function AdminCounter() {
   const [discountHolderName, setDiscountHolderName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [takeoutChargeStep, setTakeoutChargeStep] = useState(false);
+  const [takeoutCharge, setTakeoutCharge] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [printingOrder, setPrintingOrder] = useState<CompletedOrder | null>(null);
   const [printingTicket, setPrintingTicket] = useState<CounterTicketPayload | null>(null);
@@ -199,25 +223,10 @@ export default function AdminCounter() {
     [orderItems],
   );
 
-  const pricing = useMemo(() => {
-    const discountAmount = discountType !== "none" ? round2(subtotal * discountPct / 100) : 0;
-    const isVatExempt = discountType === "senior" || discountType === "pwd";
-
-    if (isVatExempt) {
-      const vatExemptSales = round2(subtotal - discountAmount);
-      return { discountAmount, vatableSales: 0, vatAmount: 0, vatExemptSales, total: vatExemptSales };
-    }
-
-    const base = round2(subtotal - discountAmount);
-
-    if (resolvedSettings.vat_registered) {
-      const vatAmount = round2((base * resolvedSettings.vat_rate) / (100 + resolvedSettings.vat_rate));
-      const vatableSales = round2(base - vatAmount);
-      return { discountAmount, vatableSales, vatAmount, vatExemptSales: 0, total: base };
-    }
-
-    return { discountAmount, vatableSales: 0, vatAmount: 0, vatExemptSales: 0, total: base };
-  }, [discountType, discountPct, resolvedSettings.vat_rate, resolvedSettings.vat_registered, subtotal]);
+  const pricing = useMemo(
+    () => computePricing(subtotal, discountType, discountPct, resolvedSettings.vat_registered, resolvedSettings.vat_rate),
+    [discountType, discountPct, resolvedSettings.vat_rate, resolvedSettings.vat_registered, subtotal],
+  );
 
   const receivedAmount = paymentMethod === "cash" ? Number(cashReceived || 0) : pricing.total;
   const changeDue = paymentMethod === "cash" ? Math.max(0, round2(receivedAmount - pricing.total)) : 0;
@@ -373,6 +382,7 @@ export default function AdminCounter() {
   function openServiceModal() {
     if (!orderItems.length || submitting) return;
     setError(null);
+    setTakeoutChargeStep(false);
     setServiceModalOpen(true);
   }
 
@@ -391,8 +401,10 @@ export default function AdminCounter() {
     setDiscountPct(0);
     setDiscountIdNumber("");
     setDiscountHolderName("");
+    setTakeoutCharge("");
     setError(null);
     setServiceModalOpen(false);
+    setTakeoutChargeStep(false);
   }
 
   async function handleSubmit(serviceType: CounterServiceType) {
@@ -401,7 +413,17 @@ export default function AdminCounter() {
     setSubmitting(true);
     setError(null);
 
-    const received = paymentMethod === "cash" ? Number(cashReceived || 0) : pricing.total;
+    const charge = serviceType === "takeout" ? round2(Number(takeoutCharge) || 0) : 0;
+    const adjustedSubtotal = round2(subtotal + charge);
+    const finalPricing = computePricing(
+      adjustedSubtotal,
+      discountType,
+      discountPct,
+      resolvedSettings.vat_registered,
+      resolvedSettings.vat_rate,
+    );
+
+    const received = paymentMethod === "cash" ? Number(cashReceived || 0) : finalPricing.total;
 
     if (DISCOUNT_PRESETS[discountType].requiresId && (!discountIdNumber.trim() || !discountHolderName.trim())) {
       setError(`${DISCOUNT_PRESETS[discountType].label} discount requires ID Number and Full Name.`);
@@ -409,7 +431,7 @@ export default function AdminCounter() {
       return;
     }
 
-    if (paymentMethod === "cash" && received < pricing.total) {
+    if (paymentMethod === "cash" && received < finalPricing.total) {
       setError("Cash received is less than the total.");
       setSubmitting(false);
       return;
@@ -418,14 +440,16 @@ export default function AdminCounter() {
     const { data, error: rpcError } = await supabase.rpc("place_counter_order", {
       p_customer_name: customerName.trim(),
       p_customer_phone: customerPhone.trim(),
-      p_subtotal: subtotal,
-      p_total_amount: pricing.total,
+      p_subtotal: adjustedSubtotal,
+      p_total_amount: finalPricing.total,
       p_payment_method: paymentMethod,
-      p_amount_received: paymentMethod === "cash" ? received : pricing.total,
+      p_amount_received: paymentMethod === "cash" ? received : finalPricing.total,
       p_notes: notes.trim() || null,
       p_senior_pwd: discountType === "senior" || discountType === "pwd",
       p_senior_pwd_id: DISCOUNT_PRESETS[discountType].requiresId ? discountIdNumber.trim() : null,
       p_senior_pwd_name: DISCOUNT_PRESETS[discountType].requiresId ? discountHolderName.trim() : null,
+      p_service_type: serviceType,
+      p_takeout_charge: charge,
       p_items: orderItems.map((item) => ({
         item_id: item.id,
         item_name: item.name,
@@ -460,23 +484,24 @@ export default function AdminCounter() {
       orNumber: row?.or_number ?? null,
       items: orderItems,
       subtotal,
-      total: pricing.total,
+      total: finalPricing.total,
       payment: paymentMethod,
       received,
-      change: Math.max(0, round2(received - pricing.total)),
+      change: Math.max(0, round2(received - finalPricing.total)),
       customer: customerName.trim() || "Walk-in",
       notes: notes.trim(),
       ticketNotes: notes.trim() || null,
       createdAt: new Date(),
-      vatableSales: Number(row?.vatable_sales ?? pricing.vatableSales),
-      vatAmount: Number(row?.vat_amount ?? pricing.vatAmount),
-      vatExemptSales: Number(row?.vat_exempt_sales ?? pricing.vatExemptSales),
+      vatableSales: Number(row?.vatable_sales ?? finalPricing.vatableSales),
+      vatAmount: Number(row?.vat_amount ?? finalPricing.vatAmount),
+      vatExemptSales: Number(row?.vat_exempt_sales ?? finalPricing.vatExemptSales),
       discountType,
       discountPct,
-      discountAmount: Number(row?.senior_pwd_discount ?? pricing.discountAmount),
+      discountAmount: Number(row?.senior_pwd_discount ?? finalPricing.discountAmount),
       discountIdNumber: DISCOUNT_PRESETS[discountType].requiresId ? discountIdNumber.trim() : null,
       discountHolderName: DISCOUNT_PRESETS[discountType].requiresId ? discountHolderName.trim() : null,
       serviceType,
+      takeoutCharge: charge,
       kitchenTicketPrintedAt: null,
       kitchenTicketPrintCount: 0,
       barTicketPrintedAt: null,
@@ -900,8 +925,14 @@ export default function AdminCounter() {
             <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-bold text-[#0d0f13]">Choose Order Type</h2>
-                  <p className="mt-1 text-sm text-[#705d48]">This label will print on the kitchen and bar tickets.</p>
+                  <h2 className="text-xl font-bold text-[#0d0f13]">
+                    {takeoutChargeStep ? "Take-out Charge" : "Choose Order Type"}
+                  </h2>
+                  <p className="mt-1 text-sm text-[#705d48]">
+                    {takeoutChargeStep
+                      ? "Enter the take-out charge for this order, if any."
+                      : "This label will print on the kitchen and bar tickets."}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -912,24 +943,56 @@ export default function AdminCounter() {
                   <X size={16} />
                 </button>
               </div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => void handleSubmit("dine-in")}
-                  className="min-h-[96px] rounded-lg border-2 border-[#ac312d] bg-[#ac312d] px-4 py-4 text-left text-white"
-                >
-                  <span className="block text-lg font-black uppercase tracking-wide">Dine In</span>
-                  <span className="mt-1 block text-sm font-semibold">Print tickets as DINE IN.</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleSubmit("takeout")}
-                  className="min-h-[96px] rounded-lg border-2 border-[#c08643] bg-white px-4 py-4 text-left text-[#0d0f13]"
-                >
-                  <span className="block text-lg font-black uppercase tracking-wide">Takeout / Pickup</span>
-                  <span className="mt-1 block text-sm font-semibold text-[#705d48]">Print tickets as TAKEOUT / PICKUP.</span>
-                </button>
-              </div>
+              {takeoutChargeStep ? (
+                <div className="mt-4">
+                  <label className="block text-sm font-semibold text-[#0d0f13]">Charge Amount (PHP)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    autoFocus
+                    value={takeoutCharge}
+                    onChange={(event) => setTakeoutCharge(event.target.value)}
+                    placeholder="0.00"
+                    className="mt-1.5 w-full rounded-md border border-[#d8d2cb] px-3 py-2 text-sm"
+                  />
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTakeoutChargeStep(false)}
+                      className="rounded-md border border-[#d8d2cb] px-4 py-2 text-sm font-semibold text-[#0d0f13]"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSubmit("takeout")}
+                      className="rounded-md bg-[#c08643] px-4 py-2 text-sm font-bold uppercase tracking-wide text-white"
+                    >
+                      Confirm Takeout
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleSubmit("dine-in")}
+                    className="min-h-[96px] rounded-lg border-2 border-[#ac312d] bg-[#ac312d] px-4 py-4 text-left text-white"
+                  >
+                    <span className="block text-lg font-black uppercase tracking-wide">Dine In</span>
+                    <span className="mt-1 block text-sm font-semibold">Print tickets as DINE IN.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTakeoutChargeStep(true)}
+                    className="min-h-[96px] rounded-lg border-2 border-[#c08643] bg-white px-4 py-4 text-left text-[#0d0f13]"
+                  >
+                    <span className="block text-lg font-black uppercase tracking-wide">Takeout / Pickup</span>
+                    <span className="mt-1 block text-sm font-semibold text-[#705d48]">Print tickets as TAKEOUT / PICKUP.</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -971,6 +1034,7 @@ export default function AdminCounter() {
               discountAmount={printingOrder.discountAmount}
               discountIdNumber={printingOrder.discountIdNumber}
               discountHolderName={printingOrder.discountHolderName}
+              takeoutCharge={printingOrder.takeoutCharge}
               settings={resolvedSettings}
               cashier={activeCashier}
             />

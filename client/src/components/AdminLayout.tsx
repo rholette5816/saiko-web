@@ -2,6 +2,7 @@ import { RoundTicket } from "@/components/RoundTicket";
 import { signOut, useAuth } from "@/lib/auth";
 import { useActiveCashier } from "@/lib/cashier";
 import { type LiveStatus, type NewOrderEvent, subscribeToOrderInserts } from "@/lib/adminRealtime";
+import { useBusinessSettings } from "@/lib/businessSettings";
 import {
   composeOrderTicketNotes,
   getRequiredTicketKinds,
@@ -10,6 +11,7 @@ import {
   parseOrderTicketNotes,
   type TicketKind,
 } from "@/lib/orderTickets";
+import { computeVatSplit, round2 } from "@/lib/orderTotals";
 import { supabase } from "@/lib/supabase";
 import logo from "@/assets/logo.png";
 import { BarChart3, Bell, BookOpen, Calculator, History, LayoutDashboard, LayoutGrid, ListOrdered, LogOut, Package, Settings, Tag, Volume2, VolumeX, Wifi, WifiOff, X } from "lucide-react";
@@ -62,6 +64,7 @@ interface OnlineOrderForModal {
   notes: string | null;
   channel?: string | null;
   total_amount: number | string;
+  takeout_charge?: number | string | null;
   created_at: string;
   kitchen_ticket_printed_at?: string | null;
   kitchen_ticket_print_count?: number | string | null;
@@ -95,6 +98,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
   const { session, role } = useAuth();
   const { activeCashier, setActiveCashier, cashierOptions } = useActiveCashier();
+  const { settings: businessSettings } = useBusinessSettings();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
@@ -104,7 +108,13 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const [printingOnlineTicket, setPrintingOnlineTicket] = useState<OnlineTicketPayload | null>(null);
   const [printingTicketKey, setPrintingTicketKey] = useState<string | null>(null);
   const [onlineTicketError, setOnlineTicketError] = useState<string | null>(null);
+  const [takeoutChargeInput, setTakeoutChargeInput] = useState("");
+  const [savingTakeoutCharge, setSavingTakeoutCharge] = useState(false);
   const onlineOrderModal = onlineOrderQueue[0] ?? null;
+
+  useEffect(() => {
+    setTakeoutChargeInput(onlineOrderModal ? String(onlineOrderModal.takeout_charge ?? "") : "");
+  }, [onlineOrderModal?.id]);
 
   const navItems = useMemo(() => {
     const all = [
@@ -219,6 +229,31 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     setOnlineOrderQueue((current) =>
       current.map((item) => (item.id === orderId ? { ...item, ...nextOrder } : item)),
     );
+  }
+
+  async function applyTakeoutCharge(order: OnlineOrderForModal, rawValue: string) {
+    const charge = round2(Number(rawValue) || 0);
+    const base = round2(Number(order.total_amount || 0) - Number(order.takeout_charge || 0) + charge);
+    const split = computeVatSplit(base, !!businessSettings?.vat_registered, businessSettings?.vat_rate ?? 12);
+
+    setSavingTakeoutCharge(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        takeout_charge: charge,
+        total_amount: split.total,
+        vatable_sales: split.vatableSales,
+        vat_amount: split.vatAmount,
+        vat_exempt_sales: split.vatExemptSales,
+      })
+      .eq("id", order.id);
+    setSavingTakeoutCharge(false);
+
+    if (error) {
+      setOnlineTicketError(error.message);
+      return;
+    }
+    updateQueuedOrder(order.id, { takeout_charge: charge, total_amount: split.total });
   }
 
   async function markOnlineTicketSubmitted(order: OnlineOrderForModal, kind: TicketKind) {
@@ -543,6 +578,35 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                   {onlineTicketError}
                 </p>
               )}
+
+              <div className="mt-3 rounded-lg border border-[#d8d2cb] bg-[#faf8f6] p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#705d48]">Take-out Charge</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-sm text-[#705d48]">PHP</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={takeoutChargeInput}
+                    onChange={(event) => setTakeoutChargeInput(event.target.value)}
+                    placeholder="0.00"
+                    className="w-28 rounded-md border border-[#d8d2cb] px-2 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void applyTakeoutCharge(onlineOrderModal, takeoutChargeInput)}
+                    disabled={savingTakeoutCharge}
+                    className="rounded-md bg-[#0d0f13] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white disabled:opacity-60"
+                  >
+                    {savingTakeoutCharge ? "Saving" : "Apply"}
+                  </button>
+                </div>
+                {Number(onlineOrderModal.takeout_charge ?? 0) > 0 && (
+                  <p className="mt-1 text-xs text-[#2d7a3e]">
+                    Current charge: {currencyPhp(Number(onlineOrderModal.takeout_charge))}
+                  </p>
+                )}
+              </div>
 
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 {renderOnlineTicketAction(onlineOrderModal, "kitchen")}

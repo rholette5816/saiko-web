@@ -27,6 +27,7 @@ interface CounterReceiptProps {
   discountAmount: number;
   discountIdNumber: string | null;
   discountHolderName: string | null;
+  takeoutCharge: number;
   settings: BusinessSettings;
   cashier?: string | null;
 }
@@ -136,6 +137,13 @@ export function CounterReceipt(props: CounterReceiptProps) {
       ))}
 
       <div className="center divider">{sectionDivider("-")}</div>
+
+      {props.takeoutCharge > 0 && (
+        <div className="row">
+          <span className="label">Take-out Charge</span>
+          <span className="value">{money(props.takeoutCharge)}</span>
+        </div>
+      )}
 
       {props.discountAmount > 0 ? (
         <>
