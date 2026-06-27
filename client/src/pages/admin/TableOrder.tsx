@@ -844,7 +844,13 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   </div>
                 </div>
 
-                <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+                <div className="mt-3 grid grid-cols-[minmax(0,1fr)_92px] gap-2 px-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-[#705d48]">Item</span>
+                  <span className="text-right text-[11px] font-semibold uppercase tracking-wide text-[#705d48]">
+                    Qty Eaten
+                  </span>
+                </div>
+                <div className="mt-1 max-h-56 space-y-2 overflow-y-auto pr-1">
                   {discountableBillItems.map((item) => (
                     <div
                       key={`${holder.id}-${item.orderItemId}`}
@@ -853,7 +859,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-[#0d0f13]">{item.itemName}</p>
                         <p className="text-xs text-[#705d48]">
-                          {currencyPhp(item.unitPrice)} | max {item.quantity}
+                          {currencyPhp(item.unitPrice)} | ordered {item.quantity}
                         </p>
                       </div>
                       <input
@@ -861,10 +867,11 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                         min="0"
                         max={item.quantity}
                         step="1"
+                        placeholder="0"
                         value={holder.allocations[item.orderItemId] ?? ""}
                         onChange={(event) => updateDiscountAllocation(holder.id, item.orderItemId, event.target.value)}
                         className="h-9 w-full rounded-lg border border-[#d8d2cb] px-2 text-right text-sm font-semibold"
-                        aria-label={`Discount quantity for ${item.itemName}`}
+                        aria-label={`Quantity of ${item.itemName} eaten by this ID holder`}
                       />
                     </div>
                   ))}
