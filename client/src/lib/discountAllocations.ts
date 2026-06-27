@@ -95,14 +95,6 @@ export function createDiscountHolderDraft(): DiscountHolderDraft {
   };
 }
 
-export function wholeBillAllocations(items: DiscountableBillItem[]): Record<string, string> {
-  const allocations: Record<string, string> = {};
-  items.forEach((item) => {
-    allocations[item.orderItemId] = String(item.quantity);
-  });
-  return allocations;
-}
-
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }

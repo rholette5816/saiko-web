@@ -12,7 +12,6 @@ import {
   DISCOUNT_TYPE_LABELS,
   isFlatDiscountType,
   requiresHolderId,
-  wholeBillAllocations,
   type DiscountHolderDraft,
   type DiscountPreviewLine,
   type DiscountableBillItem,
@@ -465,9 +464,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [discountHolders, setDiscountHolders] = useState<DiscountHolderDraft[]>([]);
   const [discountType, setDiscountType] = useState<DiscountType>("none");
   const [discountPct, setDiscountPct] = useState<string>("0");
-  const [discountIdNumber, setDiscountIdNumber] = useState("");
-  const [discountHolderName, setDiscountHolderName] = useState("");
-  const [splitDiscount, setSplitDiscount] = useState(false);
   const [printingBill, setPrintingBill] = useState<BillPayload | null>(null);
   const [cancelRound, setCancelRound] = useState<RoundWithItems | null>(null);
   const [cancelReason, setCancelReason] = useState("Cancelled by staff");
@@ -588,20 +584,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         new Date(round.created_at).getTime() < new Date(earliest).getTime() ? round.created_at : earliest,
       openRounds[0].created_at)
     : null;
-
-  useEffect(() => {
-    if (discountType === "none" || isFlatDiscountType(discountType) || splitDiscount) return;
-    setDiscountHolders([
-      {
-        id: "whole-bill",
-        holderType: discountType as HolderType,
-        holderName: discountHolderName,
-        holderIdNumber: discountIdNumber,
-        discountRate: discountPct,
-        allocations: wholeBillAllocations(discountableBillItems),
-      },
-    ]);
-  }, [discountType, discountPct, discountIdNumber, discountHolderName, splitDiscount, discountableBillItems]);
 
   const billPreview = useMemo(() => {
     const preview = isFlatDiscountType(discountType)
@@ -739,30 +721,20 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   function selectDiscountType(type: DiscountType) {
     setDiscountType(type);
     setDiscountPct(String(DISCOUNT_TYPE_GUIDE_PCT[type]));
-    setDiscountIdNumber("");
-    setDiscountHolderName("");
-    setSplitDiscount(false);
-  }
-
-  function enableSplitDiscount() {
-    setDiscountHolders((current) => {
-      const seed = current[0];
-      return [
-        {
-          id: seed && seed.id !== "whole-bill" ? seed.id : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          holderType: discountType as HolderType,
-          holderName: discountHolderName,
-          holderIdNumber: discountIdNumber,
-          discountRate: discountPct,
-          allocations: seed?.allocations ?? {},
-        },
-      ];
-    });
-    setSplitDiscount(true);
+    if (type === "senior" || type === "pwd") {
+      setDiscountHolders((current) =>
+        current.length > 0
+          ? current
+          : [{ ...createDiscountHolderDraft(), holderType: type, discountRate: String(DISCOUNT_TYPE_GUIDE_PCT[type]) }],
+      );
+    } else {
+      setDiscountHolders([]);
+    }
   }
 
   function renderDiscountPanel() {
     const needsId = requiresHolderId(discountType);
+    const flat = isFlatDiscountType(discountType);
 
     return (
       <div className="rounded-lg border border-[#d8d2cb] p-3 space-y-3">
@@ -790,78 +762,35 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
           ))}
         </div>
 
-        {discountType !== "none" && !splitDiscount && (
-          <div className="space-y-2">
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Discount %</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                value={discountPct}
-                onChange={(event) => setDiscountPct(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-2.5 py-2 text-sm"
-              />
-            </div>
-
-            {needsId && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">ID Number</label>
-                  <input
-                    type="text"
-                    value={discountIdNumber}
-                    onChange={(event) => setDiscountIdNumber(event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm"
-                    placeholder="Required"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Full Name</label>
-                  <input
-                    type="text"
-                    value={discountHolderName}
-                    onChange={(event) => setDiscountHolderName(event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm"
-                    placeholder="Required"
-                  />
-                </div>
-              </div>
-            )}
+        {flat && (
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Discount %</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={discountPct}
+              onChange={(event) => setDiscountPct(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-2.5 py-2 text-sm"
+            />
           </div>
         )}
 
-        {needsId && !splitDiscount && (
-          <button
-            type="button"
-            onClick={enableSplitDiscount}
-            className="text-xs font-semibold uppercase tracking-wide text-[#c08643] underline"
-          >
-            Split between multiple IDs or specific items
-          </button>
-        )}
-
-        {needsId && splitDiscount && (
-          <div className="space-y-3 rounded-lg border border-dashed border-[#d8d2cb] p-3">
+        {needsId && (
+          <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#705d48]">Split by ID / item</p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={addDiscountHolder}
-                  className="inline-flex h-8 items-center justify-center rounded-lg bg-[#0d0f13] px-3 text-xs font-bold uppercase tracking-wide text-white"
-                >
-                  Add ID
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSplitDiscount(false)}
-                  className="inline-flex h-8 items-center justify-center rounded-lg border border-[#d8d2cb] px-3 text-xs font-bold uppercase tracking-wide text-[#0d0f13]"
-                >
-                  Done
-                </button>
-              </div>
+              <p className="text-xs font-semibold text-[#705d48]">
+                Select only the items the {DISCOUNT_TYPE_LABELS[discountType].toLowerCase()} ate. The discount does
+                not apply to the rest of the bill.
+              </p>
+              <button
+                type="button"
+                onClick={addDiscountHolder}
+                className="inline-flex h-8 items-center justify-center rounded-lg bg-[#0d0f13] px-3 text-xs font-bold uppercase tracking-wide text-white"
+              >
+                Add ID
+              </button>
             </div>
 
             {discountHolders.map((holder, holderIndex) => (
@@ -1335,9 +1264,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setDiscountHolders([]);
     setDiscountType("none");
     setDiscountPct("0");
-    setDiscountIdNumber("");
-    setDiscountHolderName("");
-    setSplitDiscount(false);
     await loadRounds();
   }
 
@@ -1388,9 +1314,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setDiscountHolders([]);
     setDiscountType("none");
     setDiscountPct("0");
-    setDiscountIdNumber("");
-    setDiscountHolderName("");
-    setSplitDiscount(false);
     await loadRounds();
   }
 
