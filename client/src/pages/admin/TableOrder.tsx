@@ -806,16 +806,22 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                     <Trash2 size={15} />
                   </button>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)_minmax(0,1fr)_100px]">
+                <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)_minmax(0,1fr)]">
                   <div>
                     <label className="text-[11px] font-semibold uppercase tracking-wide text-[#705d48]">Type</label>
                     <select
                       value={holder.holderType}
-                      onChange={(event) => updateDiscountHolder(holder.id, { holderType: event.target.value as HolderType })}
+                      onChange={(event) => {
+                        const nextType = event.target.value as HolderType;
+                        updateDiscountHolder(holder.id, {
+                          holderType: nextType,
+                          discountRate: String(DISCOUNT_TYPE_GUIDE_PCT[nextType]),
+                        });
+                      }}
                       className="mt-1 h-10 w-full rounded-lg border border-[#d8d2cb] bg-white px-2 text-sm font-semibold"
                     >
-                      <option value="senior">Senior</option>
-                      <option value="pwd">PWD</option>
+                      <option value="senior">Senior ({DISCOUNT_TYPE_GUIDE_PCT.senior}%)</option>
+                      <option value="pwd">PWD ({DISCOUNT_TYPE_GUIDE_PCT.pwd}%)</option>
                     </select>
                   </div>
                   <div>
@@ -833,18 +839,6 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                       type="text"
                       value={holder.holderIdNumber}
                       onChange={(event) => updateDiscountHolder(holder.id, { holderIdNumber: event.target.value })}
-                      className="mt-1 h-10 w-full rounded-lg border border-[#d8d2cb] px-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wide text-[#705d48]">Rate %</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={holder.discountRate}
-                      onChange={(event) => updateDiscountHolder(holder.id, { discountRate: event.target.value })}
                       className="mt-1 h-10 w-full rounded-lg border border-[#d8d2cb] px-2 text-sm"
                     />
                   </div>
