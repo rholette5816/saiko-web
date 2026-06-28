@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { OpenStatusBadge } from "./OpenStatusBadge";
+import { ReserveTableModal } from "./ReserveTableModal";
 
 export function LocationSection() {
   const [formData, setFormData] = useState({ name: "", email: "", message: "" });
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [reserveOpen, setReserveOpen] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,7 +58,7 @@ export function LocationSection() {
                     Circumferential Road 1, Pulo Maestra Vita, Oton, Iloilo
                   </p>
                   <p className="text-sm text-[#705d48] mt-0.5">
-                    Between Shell and Petron Gasoline Station
+                    Near Vista Mall, between Shell and Petron Gasoline Station
                   </p>
                 </div>
               </div>
@@ -102,17 +104,18 @@ export function LocationSection() {
               >
                 Call Now
               </a>
-              <a
-                href="https://m.me/saikoramenandsushi?ref=book-a-table"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => setReserveOpen(true)}
                 className="py-2 px-4 bg-[#ac312d] text-white font-medium rounded-lg hover:bg-[#8f2825] hover:shadow-md transition-all text-sm text-center uppercase tracking-wide"
               >
-                Book a Table
-              </a>
+                Reserve a Table
+              </button>
             </div>
           </div>
         </div>
+
+        <ReserveTableModal open={reserveOpen} onClose={() => setReserveOpen(false)} />
 
         {/* Google Maps Embed */}
         <div className="relative w-full h-96 md:h-[450px] rounded-2xl overflow-hidden shadow-lg mb-12">

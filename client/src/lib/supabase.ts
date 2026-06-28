@@ -85,6 +85,22 @@ export interface PromoCodeRow {
   updated_at: string;
 }
 
+export interface TableReservationRow {
+  id: string;
+  guest_name: string;
+  guest_phone: string;
+  party_size: number;
+  reservation_date: string;
+  reservation_time: string;
+  preferred_table_id: string | null;
+  notes: string | null;
+  status: "pending" | "confirmed" | "declined" | "cancelled";
+  assigned_table_id: string | null;
+  staff_notes: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+}
+
 export interface BusinessSettings {
   id: string;
   business_name: string;

@@ -31,6 +31,7 @@ import AdminDailyReport from "./pages/admin/DailyReport";
 import AdminDataCenter from "./pages/admin/DataCenter";
 import AdminBacklog from "./pages/admin/Backlog";
 import AdminHelp from "./pages/admin/Help";
+import AdminReservations from "./pages/admin/Reservations";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -116,6 +117,11 @@ function Router() {
         <Route path={"/admin/promos"}>
           <AdminGuard adminOnly>
             <AdminPromos />
+          </AdminGuard>
+        </Route>
+        <Route path={"/admin/reservations"}>
+          <AdminGuard adminOnly>
+            <AdminReservations />
           </AdminGuard>
         </Route>
         <Route path={"/admin/settings"}>
