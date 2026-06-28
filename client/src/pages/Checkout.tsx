@@ -59,6 +59,18 @@ export default function Checkout() {
     !!selectedSlot &&
     !submitting;
 
+  const disabledReason = submitting
+    ? null
+    : cart.items.length === 0
+      ? "Add at least one item to your cart."
+      : name.trim().length < 2
+        ? "Enter your name."
+        : !/^09\d{9}$/.test(phone.replace(/\s|-/g, ""))
+          ? "Enter a valid PH mobile number (09XXXXXXXXX, 11 digits)."
+          : !selectedSlot
+            ? "Choose a pickup time."
+            : null;
+
   async function handleApplyPromo() {
     const code = promoInput.trim();
     if (!code) return;
@@ -393,6 +405,9 @@ export default function Checkout() {
               >
                 {submitting ? "Sending..." : "Place Order"}
               </button>
+              {disabledReason && (
+                <p className="text-xs font-semibold text-[#ac312d] text-center">{disabledReason}</p>
+              )}
               <p className="text-xs text-[#705d48] text-center">Pickup only. No payment online. Pay at the counter.</p>
             </aside>
           </form>
