@@ -5,7 +5,7 @@ import { type DateRange, type DateRangeKey, getCustomRange, getRange } from "@/l
 import { getRequiredTicketKinds, getTicketStatus, type TicketKind } from "@/lib/orderTickets";
 import { supabase, type OrderItemRow, type OrderRow } from "@/lib/supabase";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 
 type StatusFilter = "all" | "pending" | "preparing" | "ready" | "completed" | "cancelled";
 type BulkStatusAction = "preparing" | "ready" | "completed" | "cancelled";
@@ -505,6 +505,7 @@ export default function AdminOrders() {
                       <th className="py-2">Status</th>
                       <th className="py-2">Tickets</th>
                       <th className="py-2">Created</th>
+                      <th className="py-2">Receipt</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -534,6 +535,14 @@ export default function AdminOrders() {
                         </td>
                         <td className="py-2">{renderTicketStatus(order)}</td>
                         <td className="py-2 text-xs text-[#705d48]">{formatDate(order.created_at)}</td>
+                        <td className="py-2" onClick={(event) => event.stopPropagation()}>
+                          <Link
+                            href={`/admin/orders/${order.id}/print`}
+                            className="inline-block px-2.5 py-1 rounded-md border border-[#d8d2cb] text-xs font-semibold text-[#0d0f13] hover:border-[#c08643]"
+                          >
+                            Print
+                          </Link>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -573,6 +582,14 @@ export default function AdminOrders() {
                     <div className="mt-2">{renderTicketStatus(order)}</div>
                     <p className="text-sm font-semibold text-[#0d0f13] mt-1">{currencyPhp(Number(order.total_amount))}</p>
                     <p className="text-xs text-[#705d48] mt-1">{formatDate(order.created_at)}</p>
+                    <div onClick={(event) => event.stopPropagation()} className="mt-2">
+                      <Link
+                        href={`/admin/orders/${order.id}/print`}
+                        className="inline-block px-2.5 py-1.5 rounded-md border border-[#d8d2cb] text-xs font-semibold text-[#0d0f13]"
+                      >
+                        Print Receipt
+                      </Link>
+                    </div>
                   </div>
                 ))}
               </div>

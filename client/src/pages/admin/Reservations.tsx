@@ -4,11 +4,12 @@ import { supabase, type TableReservationRow } from "@/lib/supabase";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-type StatusFilter = "pending" | "confirmed" | "declined" | "cancelled" | "all";
+type StatusFilter = "pending" | "confirmed" | "completed" | "declined" | "cancelled" | "all";
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "pending", label: "Pending" },
   { value: "confirmed", label: "Confirmed" },
+  { value: "completed", label: "Completed" },
   { value: "declined", label: "Declined" },
   { value: "cancelled", label: "Cancelled" },
   { value: "all", label: "All" },
@@ -34,6 +35,8 @@ function statusBadgeClass(status: TableReservationRow["status"]): string {
   switch (status) {
     case "confirmed":
       return "bg-[#2d7a3e]/10 text-[#2d7a3e]";
+    case "completed":
+      return "bg-[#0d0f13]/10 text-[#0d0f13]";
     case "declined":
       return "bg-[#ac312d]/10 text-[#ac312d]";
     case "cancelled":
@@ -119,6 +122,24 @@ export default function AdminReservations() {
     setNotice(`Reservation for ${reservation.guest_name} confirmed.`);
     setAssigningId(null);
     setAssignTableId("");
+    await loadReservations();
+  }
+
+  async function handleMarkCompleted(reservation: TableReservationRow) {
+    setSavingId(reservation.id);
+    setError(null);
+    const { error: updateError } = await supabase
+      .from("table_reservations")
+      .update({ status: "completed" })
+      .eq("id", reservation.id);
+
+    setSavingId(null);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setNotice(`Reservation for ${reservation.guest_name} marked as seated.`);
     await loadReservations();
   }
 
@@ -284,6 +305,20 @@ export default function AdminReservations() {
                             </button>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {reservation.status === "confirmed" && (
+                      <div className="mt-3 border-t border-[#ebe9e6] pt-3">
+                        <button
+                          type="button"
+                          onClick={() => handleMarkCompleted(reservation)}
+                          disabled={isSaving}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#0d0f13] px-3 text-xs font-bold uppercase tracking-wide text-white disabled:opacity-60"
+                        >
+                          <Check size={13} />
+                          {isSaving ? "Saving..." : "Mark Seated"}
+                        </button>
                       </div>
                     )}
                   </div>

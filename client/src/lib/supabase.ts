@@ -94,7 +94,7 @@ export interface TableReservationRow {
   reservation_time: string;
   preferred_table_id: string | null;
   notes: string | null;
-  status: "pending" | "confirmed" | "declined" | "cancelled";
+  status: "pending" | "confirmed" | "completed" | "declined" | "cancelled";
   assigned_table_id: string | null;
   staff_notes: string | null;
   created_at: string;

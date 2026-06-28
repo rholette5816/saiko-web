@@ -118,6 +118,10 @@ function formatReservationTime(value: string): string {
   return date.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
 }
 
+function todayIso(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+}
+
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
   const { session, role } = useAuth();
@@ -127,6 +131,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
   const [reservationLiveStatus, setReservationLiveStatus] = useState<LiveStatus>("connecting");
+  const [todaysReservedCount, setTodaysReservedCount] = useState(0);
   const [unseenOrders, setUnseenOrders] = useState<NewOrderEvent[]>([]);
   const [unseenReservations, setUnseenReservations] = useState<NewReservationEvent[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -158,11 +163,11 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       { href: "/admin/orders", label: "Orders", icon: ListOrdered, active: (path: string) => path.startsWith("/admin/orders") },
       { href: "/admin/counter", label: "Counter", icon: Calculator, active: (path: string) => path.startsWith("/admin/counter") },
       { href: "/admin/tables", label: "Tables", icon: LayoutGrid, active: (path: string) => path.startsWith("/admin/tables") },
+      { href: "/admin/reservations", label: "Reservations", icon: CalendarCheck, active: (path: string) => path.startsWith("/admin/reservations") },
       { href: "/admin/data-center", label: "Data Center", icon: BarChart3, active: (path: string) => path.startsWith("/admin/data-center") },
       { href: "/admin/backlog", label: "Backlog", icon: History, active: (path: string) => path.startsWith("/admin/backlog") },
       { href: "/admin/products", label: "Products", icon: Package, active: (path: string) => path.startsWith("/admin/products") },
       { href: "/admin/promos", label: "Promos", icon: Tag, active: (path: string) => path.startsWith("/admin/promos") },
-      { href: "/admin/reservations", label: "Reservations", icon: CalendarCheck, active: (path: string) => path.startsWith("/admin/reservations") },
       { href: "/admin/settings", label: "Settings", icon: Settings, active: (path: string) => path.startsWith("/admin/settings") },
       { href: "/admin/help", label: "Help", icon: BookOpen, active: (path: string) => path.startsWith("/admin/help") },
     ];
@@ -247,6 +252,27 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     );
     return () => unsubscribe();
   }, [soundEnabled]);
+
+  useEffect(() => {
+    async function loadTodaysReservedCount() {
+      const { count } = await supabase
+        .from("table_reservations")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "confirmed")
+        .eq("reservation_date", todayIso());
+      setTodaysReservedCount(count ?? 0);
+    }
+    void loadTodaysReservedCount();
+    const channel = supabase
+      .channel("admin-nav-reservations")
+      .on("postgres_changes", { event: "*", schema: "public", table: "table_reservations" }, () => {
+        void loadTodaysReservedCount();
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
   async function handleConfirmReservation(reservation: NewReservationEvent) {
     if (!reservationAssignTableId) {
@@ -634,16 +660,27 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             {navItems.map((item) => {
               const isActive = item.active(location);
               const Icon = item.icon;
+              const navBadge =
+                item.label === "Reservations"
+                  ? unseenReservations.length
+                  : item.label === "Tables"
+                    ? todaysReservedCount
+                    : 0;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold whitespace-nowrap ${
+                  className={`relative inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold whitespace-nowrap ${
                     isActive ? "bg-[#c08643] text-[#0d0f13]" : "text-[#f2ede7] hover:bg-[#1c212a]"
                   }`}
                 >
                   <Icon size={16} />
                   {item.label}
+                  {navBadge > 0 && (
+                    <span className="inline-flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-[#ac312d] text-white text-[10px] font-bold leading-none">
+                      {navBadge > 9 ? "9+" : navBadge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
