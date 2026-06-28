@@ -88,12 +88,20 @@ export interface NewReservationEvent {
 
 const seenReservationIds = new Set<string>();
 const reservationListeners = new Set<(reservation: NewReservationEvent) => void>();
+const reservationStatusListeners = new Set<(status: LiveStatus) => void>();
 
+let reservationLiveStatus: LiveStatus = "offline";
 let reservationChannelRef: ReturnType<typeof supabase.channel> | null = null;
 let reservationSubscribers = 0;
 
+function notifyReservationStatus(nextStatus: LiveStatus) {
+  reservationLiveStatus = nextStatus;
+  reservationStatusListeners.forEach((listener) => listener(nextStatus));
+}
+
 function ensureReservationChannel() {
   if (reservationChannelRef) return;
+  notifyReservationStatus("connecting");
   reservationChannelRef = supabase
     .channel("admin-reservations-live")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "table_reservations" }, (payload) => {
@@ -114,23 +122,35 @@ function ensureReservationChannel() {
       seenReservationIds.add(reservation.id);
       reservationListeners.forEach((listener) => listener(reservation));
     })
-    .subscribe((status, err) => {
-      console.log("[reservations channel]", status, err ?? "");
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") notifyReservationStatus("live");
+      if (status === "TIMED_OUT" || status === "CHANNEL_ERROR" || status === "CLOSED") {
+        notifyReservationStatus("offline");
+      }
     });
 }
 
-export function subscribeToReservationInserts(onReservation: (reservation: NewReservationEvent) => void): () => void {
+export function subscribeToReservationInserts(
+  onReservation: (reservation: NewReservationEvent) => void,
+  onStatus?: (status: LiveStatus) => void,
+): () => void {
   reservationSubscribers += 1;
   reservationListeners.add(onReservation);
+  if (onStatus) {
+    reservationStatusListeners.add(onStatus);
+    onStatus(reservationLiveStatus);
+  }
   ensureReservationChannel();
 
   return () => {
     reservationSubscribers = Math.max(0, reservationSubscribers - 1);
     reservationListeners.delete(onReservation);
+    if (onStatus) reservationStatusListeners.delete(onStatus);
 
     if (reservationSubscribers === 0 && reservationChannelRef) {
       supabase.removeChannel(reservationChannelRef);
       reservationChannelRef = null;
+      notifyReservationStatus("offline");
     }
   };
 }

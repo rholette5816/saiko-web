@@ -126,6 +126,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
+  const [reservationLiveStatus, setReservationLiveStatus] = useState<LiveStatus>("connecting");
   const [unseenOrders, setUnseenOrders] = useState<NewOrderEvent[]>([]);
   const [unseenReservations, setUnseenReservations] = useState<NewReservationEvent[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -224,23 +225,26 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   }, [soundEnabled]);
 
   useEffect(() => {
-    const unsubscribe = subscribeToReservationInserts((reservation) => {
-      setReservationQueue((current) => {
-        if (current.some((item) => item.id === reservation.id)) return current;
-        return [...current, reservation];
-      });
-      setUnseenReservations((prev) => {
-        if (prev.some((item) => item.id === reservation.id)) return prev;
-        return [reservation, ...prev].slice(0, 20);
-      });
-      if (soundEnabled) {
-        try {
-          playAlertTone();
-        } catch {
-          // ignore browser audio restrictions
+    const unsubscribe = subscribeToReservationInserts(
+      (reservation) => {
+        setReservationQueue((current) => {
+          if (current.some((item) => item.id === reservation.id)) return current;
+          return [...current, reservation];
+        });
+        setUnseenReservations((prev) => {
+          if (prev.some((item) => item.id === reservation.id)) return prev;
+          return [reservation, ...prev].slice(0, 20);
+        });
+        if (soundEnabled) {
+          try {
+            playAlertTone();
+          } catch {
+            // ignore browser audio restrictions
+          }
         }
-      }
-    });
+      },
+      (status) => setReservationLiveStatus(status),
+    );
     return () => unsubscribe();
   }, [soundEnabled]);
 
@@ -461,6 +465,8 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   const liveText = liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline";
+  const reservationLiveText =
+    reservationLiveStatus === "live" ? "Reservations Live" : reservationLiveStatus === "connecting" ? "Reservations Connecting" : "Reservations Offline";
 
   return (
     <div className={`min-h-screen bg-[#ebe9e6] text-[#0d0f13] ${printingOnlineTicket ? "admin-online-ticket-printing" : ""}`}>
@@ -492,6 +498,15 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             >
               {liveStatus === "live" ? <Wifi size={13} /> : <WifiOff size={13} />}
               {liveText}
+            </span>
+            <span
+              className={`hidden md:inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${
+                reservationLiveStatus === "live" ? "bg-[#2d7a3e]/10 text-[#2d7a3e]" : "bg-[#ac312d]/10 text-[#ac312d]"
+              }`}
+              title="Reservation notification channel status"
+            >
+              {reservationLiveStatus === "live" ? <Wifi size={13} /> : <WifiOff size={13} />}
+              {reservationLiveText}
             </span>
             <button
               type="button"
