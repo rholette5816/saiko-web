@@ -19,6 +19,8 @@ import {
   type HolderType,
 } from "@/lib/discountAllocations";
 import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
+import { enqueue } from "@/lib/offlineQueue";
+import { useOnlineStatus } from "@/lib/offlineStatus";
 import { paymentMethodOptions, paymentMethodShortLabel, type PaymentMethod } from "@/lib/paymentMethods";
 import { type BusinessSettings, supabase } from "@/lib/supabase";
 import { TABLES, getTable, type TableDef } from "@/lib/tables";
@@ -76,6 +78,7 @@ interface RoundWithItems {
   bar_ticket_printed_at?: string | null;
   bar_ticket_print_count?: number | string | null;
   order_items?: RoundItemRow[] | null;
+  pendingSync?: boolean;
 }
 
 interface PlaceTableRoundRow {
@@ -431,6 +434,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const { loading: authLoading, role } = useAuth();
   const { activeCashier } = useActiveCashier();
   const { settings, loading: settingsLoading } = useBusinessSettings();
+  const isOnline = useOnlineStatus();
   const resolvedSettings = settings ?? DEFAULT_SETTINGS;
   const cashierName = activeCashier;
   const canManageBilling = !authLoading && role !== "staff";
@@ -632,6 +636,44 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       quantity: item.quantity,
       line_total: round2(item.price * item.quantity),
     }));
+  }
+
+  function buildLocalRoundItems(roundId: string, items: ReturnType<typeof buildOrderItemPayload>): RoundItemRow[] {
+    return items.map((item, index) => ({
+      id: `${roundId}-${item.item_id}-${index}`,
+      ...item,
+    }));
+  }
+
+  function resetRoundForm() {
+    setEditingRoundId(null);
+    setOrderItems([]);
+    setNotes("");
+    setSubmittingRound(false);
+    setDiscountHolders([]);
+    setDiscountType("none");
+    setDiscountPct("0");
+  }
+
+  function markTicketPrintedLocally(orderId: string, kind: TicketKind) {
+    const printedAt = new Date().toISOString();
+    setOpenRounds((current) =>
+      current.map((round) => {
+        if (round.id !== orderId) return round;
+        const printCount = ticketPrintCount(round, kind) + 1;
+        return kind === "kitchen"
+          ? {
+              ...round,
+              kitchen_ticket_printed_at: printedAt,
+              kitchen_ticket_print_count: printCount,
+            }
+          : {
+              ...round,
+              bar_ticket_printed_at: printedAt,
+              bar_ticket_print_count: printCount,
+            };
+      }),
+    );
   }
 
   function buildBillRounds(): BillRound[] {
@@ -1066,6 +1108,15 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     };
   }, [table?.id]);
 
+  useEffect(() => {
+    function handleTableRoundSynced() {
+      void loadRounds();
+    }
+
+    window.addEventListener("saiko:table-round-synced", handleTableRoundSynced);
+    return () => window.removeEventListener("saiko:table-round-synced", handleTableRoundSynced);
+  }, [table?.id]);
+
   function getRoundTicketItems(round: RoundWithItems, kind: TicketKind) {
     return (round.order_items ?? [])
       .filter((item) => {
@@ -1094,13 +1145,36 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   }
 
   async function markTicketPrinted(orderId: string, kind: TicketKind) {
-    const { error: markError } = await supabase.rpc("mark_table_ticket_printed", {
-      p_order_id: orderId,
-      p_kind: kind,
-    });
+    function queueTicketPrint() {
+      enqueue("table_ticket_print", {
+        p_order_id: orderId,
+        p_kind: kind,
+      });
+      markTicketPrintedLocally(orderId, kind);
+    }
 
-    if (markError) {
-      setError(markError.message);
+    if (!isOnline) {
+      queueTicketPrint();
+      return;
+    }
+
+    try {
+      const { error: markError } = await supabase.rpc("mark_table_ticket_printed", {
+        p_order_id: orderId,
+        p_kind: kind,
+      });
+
+      if (markError) {
+        if (!markError.code) {
+          queueTicketPrint();
+          return;
+        }
+
+        setError(markError.message);
+        return;
+      }
+    } catch {
+      queueTicketPrint();
       return;
     }
 
@@ -1237,15 +1311,80 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     setSubmittingRound(true);
     setError(null);
 
-    const { data, error: rpcError } = await supabase.rpc("place_table_round", {
-      p_table_number: table.id,
-      p_subtotal: currentSubtotal,
-      p_notes: composeRoundNotes(selectedWaiter, notes),
-      p_items: buildOrderItemPayload(),
-    });
+    const tableNumber = table.id;
+    const itemPayload = buildOrderItemPayload();
+    const roundNotes = composeRoundNotes(selectedWaiter, notes);
 
-    if (rpcError) {
-      setError(rpcError.message);
+    function queueTableRound() {
+      if (!openOrder) {
+        setError("Internet connection is required to open a new table.");
+        setSubmittingRound(false);
+        return;
+      }
+
+      const clientRequestId = crypto.randomUUID();
+      const pendingRoundId = `pending-${clientRequestId}`;
+      enqueue("table_round", {
+        p_table_number: tableNumber,
+        p_subtotal: currentSubtotal,
+        p_notes: roundNotes,
+        p_items: itemPayload,
+        p_client_request_id: clientRequestId,
+      });
+
+      setOpenRounds((current) => [
+        ...current,
+        {
+          id: pendingRoundId,
+          order_id: openOrder.id,
+          round_no: current.length + 1,
+          order_number: openOrder.order_number,
+          or_number: openOrder.or_number,
+          created_at: new Date().toISOString(),
+          subtotal: currentSubtotal,
+          total_amount: currentSubtotal,
+          status: "active",
+          notes: roundNotes,
+          order_items: buildLocalRoundItems(pendingRoundId, itemPayload),
+          pendingSync: true,
+        },
+      ]);
+      setExpandedRounds((current) => new Set(current).add(pendingRoundId));
+      resetRoundForm();
+    }
+
+    if (!isOnline) {
+      queueTableRound();
+      return;
+    }
+
+    let data: unknown;
+    try {
+      const { data: rpcData, error: rpcError } = await supabase.rpc("place_table_round", {
+        p_table_number: tableNumber,
+        p_subtotal: currentSubtotal,
+        p_notes: roundNotes,
+        p_items: itemPayload,
+      });
+
+      if (rpcError) {
+        if (!rpcError.code && openOrder) {
+          queueTableRound();
+          return;
+        }
+
+        setError(rpcError.message);
+        setSubmittingRound(false);
+        return;
+      }
+      data = rpcData;
+    } catch (error) {
+      if (openOrder) {
+        queueTableRound();
+        return;
+      }
+
+      setError(error instanceof Error ? error.message : "Unable to submit this round.");
       setSubmittingRound(false);
       return;
     }
@@ -1258,13 +1397,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       return;
     }
 
-    setOrderItems([]);
-    setNotes("");
     setExpandedRounds((current) => new Set(current).add(row.round_id));
-    setSubmittingRound(false);
-    setDiscountHolders([]);
-    setDiscountType("none");
-    setDiscountPct("0");
+    resetRoundForm();
     await loadRounds();
   }
 
@@ -1275,6 +1409,10 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     }
     if (roundManagementDisabled) {
       setError(roundManagementTitle ?? "This round cannot be edited now.");
+      return;
+    }
+    if (round.pendingSync) {
+      setError("This round is waiting to sync.");
       return;
     }
 
@@ -1293,28 +1431,67 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
       setError(roundManagementTitle ?? "This round cannot be edited now.");
       return;
     }
+    if (round.pendingSync) {
+      setError("This round is waiting to sync.");
+      return;
+    }
 
     setSubmittingRound(true);
     setError(null);
 
-    const { error: rpcError } = await supabase.rpc("update_table_round_items", {
-      p_round_id: round.id,
-      p_items: buildOrderItemPayload(),
-    });
+    const itemPayload = buildOrderItemPayload();
 
-    if (rpcError) {
-      setError(rpcError.message);
-      setSubmittingRound(false);
+    function applyLocalRoundEdit() {
+      setOpenRounds((current) =>
+        current.map((currentRound) =>
+          currentRound.id === round.id
+            ? {
+                ...currentRound,
+                subtotal: currentSubtotal,
+                total_amount: currentSubtotal,
+                order_items: buildLocalRoundItems(round.id, itemPayload),
+              }
+            : currentRound,
+        ),
+      );
+      resetRoundForm();
+    }
+
+    function queueRoundEdit() {
+      enqueue("table_round_edit", {
+        p_round_id: round.id,
+        p_items: itemPayload,
+      });
+      applyLocalRoundEdit();
+    }
+
+    if (!isOnline) {
+      queueRoundEdit();
       return;
     }
 
-    setEditingRoundId(null);
-    setOrderItems([]);
-    setNotes("");
-    setSubmittingRound(false);
-    setDiscountHolders([]);
-    setDiscountType("none");
-    setDiscountPct("0");
+    try {
+      const { error: rpcError } = await supabase.rpc("update_table_round_items", {
+        p_round_id: round.id,
+        p_items: itemPayload,
+      });
+
+      if (rpcError) {
+        if (!rpcError.code) {
+          queueRoundEdit();
+          return;
+        }
+
+        setError(rpcError.message);
+        setSubmittingRound(false);
+        return;
+      }
+    } catch {
+      queueRoundEdit();
+      return;
+    }
+
+    resetRoundForm();
     await loadRounds();
   }
 
@@ -1325,6 +1502,10 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     }
     if (roundManagementDisabled) {
       setError(roundManagementTitle ?? "This round cannot be cancelled now.");
+      return;
+    }
+    if (round.pendingSync) {
+      setError("This round is waiting to sync.");
       return;
     }
 
@@ -1680,7 +1861,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
         <button
           type="button"
           onClick={() => void printTicket(buildRoundTicketPayload(round), kind)}
-          disabled={isPrinting}
+          disabled={isPrinting || round.pendingSync}
+          title={round.pendingSync ? "This round is waiting to sync" : undefined}
           className={`inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-bold uppercase tracking-wide ${
             printedAt
               ? "border border-[#0d0f13] bg-white text-[#0d0f13]"
@@ -1699,7 +1881,8 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
     if (!canManageBilling) return null;
 
     const busy = submittingRound || cancellingRoundId !== null;
-    const disabled = roundManagementDisabled || busy;
+    const disabled = roundManagementDisabled || busy || round.pendingSync;
+    const title = round.pendingSync ? "This round is waiting to sync" : roundManagementTitle;
     const editLabel = editingRoundId === round.id ? "Editing" : "Edit";
     const cancelLabel = cancellingRoundId === round.id ? "Cancelling..." : "Cancel";
 
@@ -1709,7 +1892,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
           type="button"
           onClick={() => beginEditRound(round)}
           disabled={disabled}
-          title={roundManagementTitle}
+          title={title}
           className="inline-flex h-9 items-center justify-center rounded-md border border-[#0d0f13] bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#0d0f13] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {editLabel}
@@ -1718,7 +1901,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
           type="button"
           onClick={() => beginCancelRound(round)}
           disabled={disabled}
-          title={roundManagementTitle}
+          title={title}
           className="inline-flex h-9 items-center justify-center rounded-md border border-[#ac312d] bg-white px-3 text-xs font-bold uppercase tracking-wide text-[#ac312d] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {cancelLabel}
@@ -1798,12 +1981,15 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                           <button
                             type="button"
                             onClick={() => void handleUnmergeTable(linkedId)}
-                            disabled={unmergingTable === linkedId}
+                            disabled={unmergingTable === linkedId || !isOnline}
                             className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-[#c08643]/20 disabled:opacity-50"
                             title={`Unmerge Table ${linkedDef?.number ?? linkedId}`}
                           >
                             <X size={10} />
                           </button>
+                        )}
+                        {canManageBilling && !hasBilledOut && !isOnline && (
+                          <span className="text-[10px] font-semibold text-[#ac312d]">Needs internet connection</span>
                         )}
                       </span>
                     );
@@ -1957,6 +2143,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                       >
                         <span>
                           <span className="block text-sm font-bold text-[#0d0f13]">Round {index + 1}</span>
+                          {round.pendingSync && <span className="block text-[11px] font-bold text-[#e88627]">Pending sync</span>}
                           <span className="block text-xs text-[#705d48]">
                             {formatTime(round.created_at)} | {countRoundItems(round)} items | {currencyPhp(roundSubtotal(round))}
                           </span>
@@ -2084,11 +2271,19 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                       }
                       void handleSubmitRound();
                     }}
-                    disabled={!orderItems.length || submittingRound || (!editingRound && !waiterName.trim())}
+                    disabled={
+                      !orderItems.length ||
+                      submittingRound ||
+                      (!editingRound && !waiterName.trim()) ||
+                      (!editingRound && !isOnline && !openOrder)
+                    }
                     className="h-11 w-full rounded-lg bg-[#ac312d] text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {submittingRound ? (editingRound ? "Saving..." : "Submitting...") : editingRound ? "Save Changes" : "Submit Round"}
                   </button>
+                  {!isOnline && !editingRound && !openOrder && (
+                    <p className="mt-1 text-xs font-semibold text-[#ac312d]">Needs internet connection</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -2274,7 +2469,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   <button
                     type="button"
                     onClick={handleConfirmCloseBill}
-                    disabled={closing || billPreview.errors.length > 0}
+                    disabled={closing || billPreview.errors.length > 0 || !isOnline}
                     className="h-11 rounded-lg bg-[#ac312d] text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50"
                   >
                     {closing ? "Closing..." : "Confirm & Print"}
@@ -2288,6 +2483,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                     Cancel
                   </button>
                 </div>
+                {!isOnline && <p className="text-xs font-semibold text-[#ac312d]">Needs internet connection</p>}
               </div>
             </div>
           </div>
@@ -2383,7 +2579,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   <button
                     type="button"
                     onClick={() => void handleConfirmCancelRound()}
-                    disabled={cancellingRoundId === cancelRound.id}
+                    disabled={cancellingRoundId === cancelRound.id || !isOnline}
                     className="h-11 rounded-lg bg-[#ac312d] text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50"
                   >
                     {cancellingRoundId === cancelRound.id ? "Cancelling..." : "Confirm Cancel"}
@@ -2397,6 +2593,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                     Keep Round
                   </button>
                 </div>
+                {!isOnline && <p className="text-xs font-semibold text-[#ac312d]">Needs internet connection</p>}
               </div>
             </div>
           </div>
@@ -2470,7 +2667,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   <button
                     type="button"
                     onClick={() => void handleConfirmMoveRound()}
-                    disabled={!selectedMoveTable || movingRoundId === moveRound.id}
+                    disabled={!selectedMoveTable || movingRoundId === moveRound.id || !isOnline}
                     className="h-11 rounded-lg bg-[#c08643] text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50"
                   >
                     {movingRoundId === moveRound.id ? "Moving..." : "Confirm Move"}
@@ -2484,6 +2681,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                     Cancel
                   </button>
                 </div>
+                {!isOnline && <p className="text-xs font-semibold text-[#ac312d]">Needs internet connection</p>}
               </div>
             </div>
           </div>
@@ -2553,7 +2751,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                   <button
                     type="button"
                     onClick={() => void handleConfirmMergeTable()}
-                    disabled={!selectedMergeTable || merging}
+                    disabled={!selectedMergeTable || merging || !isOnline}
                     className="h-11 rounded-lg bg-[#c08643] text-sm font-bold uppercase tracking-wide text-white disabled:opacity-50"
                   >
                     {merging ? "Merging..." : "Confirm Merge"}
@@ -2567,6 +2765,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
                     Cancel
                   </button>
                 </div>
+                {!isOnline && <p className="text-xs font-semibold text-[#ac312d]">Needs internet connection</p>}
               </div>
             </div>
           </div>

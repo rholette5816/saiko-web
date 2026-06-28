@@ -39,15 +39,40 @@ export function useOfflineSync(): OfflineSyncState {
     try {
       const queue = getQueue();
       for (const entry of queue) {
-        if (entry.type !== "counter_order") continue;
+        let syncsTableRound = false;
+        let rpcError: { message: string } | null = null;
 
-        const { error } = await supabase.rpc("place_counter_order", entry.payload);
-        if (error) {
-          setLastError(error.message);
+        if (entry.type === "counter_order") {
+          const { error } = await supabase.rpc("place_counter_order", entry.payload);
+          rpcError = error;
+        }
+
+        if (entry.type === "table_round") {
+          const { error } = await supabase.rpc("place_table_round", entry.payload);
+          rpcError = error;
+          syncsTableRound = true;
+        }
+
+        if (entry.type === "table_round_edit") {
+          const { error } = await supabase.rpc("update_table_round_items", entry.payload);
+          rpcError = error;
+          syncsTableRound = true;
+        }
+
+        if (entry.type === "table_ticket_print") {
+          const { error } = await supabase.rpc("mark_table_ticket_printed", entry.payload);
+          rpcError = error;
+        }
+
+        if (rpcError) {
+          setLastError(rpcError.message);
           return;
         }
 
         removeFromQueue(entry.localId);
+        if (syncsTableRound) {
+          window.dispatchEvent(new CustomEvent("saiko:table-round-synced"));
+        }
         refreshPendingCount();
       }
     } catch (error) {

@@ -2,7 +2,7 @@ const QUEUE_KEY = "saiko-offline-queue";
 
 export interface QueuedAction {
   localId: string;
-  type: "counter_order";
+  type: "counter_order" | "table_round" | "table_round_edit" | "table_ticket_print";
   payload: Record<string, unknown>;
   createdAt: string;
 }
