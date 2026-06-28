@@ -32,16 +32,39 @@ function todayIso(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 }
 
+interface OperatingHours {
+  open: string;
+  close: string;
+  label: string;
+}
+
+function getOperatingHours(dateIso: string): OperatingHours {
+  const day = dateIso ? new Date(`${dateIso}T00:00:00`).getDay() : null;
+  const isFriToSun = day === null || day === 0 || day === 5 || day === 6;
+  return isFriToSun
+    ? { open: "10:00", close: "22:00", label: "10:00 AM to 10:00 PM" }
+    : { open: "10:00", close: "21:00", label: "10:00 AM to 9:00 PM" };
+}
+
 export function ReserveTableModal({ open, onClose }: ReserveTableModalProps) {
   const [form, setForm] = useState<ReservationFormState>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmedName, setConfirmedName] = useState<string | null>(null);
+  const operatingHours = getOperatingHours(form.date);
 
   if (!open) return null;
 
   function updateForm<K extends keyof ReservationFormState>(key: K, value: ReservationFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updateDate(value: string) {
+    setForm((prev) => {
+      const hours = getOperatingHours(value);
+      const time = prev.time && prev.time >= hours.open && prev.time <= hours.close ? prev.time : "";
+      return { ...prev, date: value, time };
+    });
   }
 
   function handleClose() {
@@ -77,6 +100,10 @@ export function ReserveTableModal({ open, onClose }: ReserveTableModalProps) {
     }
     if (!form.time) {
       setError("Please choose a time.");
+      return;
+    }
+    if (form.time < operatingHours.open || form.time > operatingHours.close) {
+      setError(`Please choose a time between ${operatingHours.label} (our operating hours).`);
       return;
     }
 
@@ -168,7 +195,7 @@ export function ReserveTableModal({ open, onClose }: ReserveTableModalProps) {
                   type="date"
                   value={form.date}
                   min={todayIso()}
-                  onChange={(e) => updateForm("date", e.target.value)}
+                  onChange={(e) => updateDate(e.target.value)}
                   required
                   className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm text-[#0d0f13]"
                 />
@@ -178,10 +205,13 @@ export function ReserveTableModal({ open, onClose }: ReserveTableModalProps) {
                 <input
                   type="time"
                   value={form.time}
+                  min={operatingHours.open}
+                  max={operatingHours.close}
                   onChange={(e) => updateForm("time", e.target.value)}
                   required
                   className="mt-1 w-full rounded-lg border border-[#d8d2cb] px-3 py-2.5 text-sm text-[#0d0f13]"
                 />
+                <span className="mt-1 block text-xs text-[#705d48]">Hours: {operatingHours.label}</span>
               </label>
               <label className="text-sm text-[#705d48]">
                 Party Size
