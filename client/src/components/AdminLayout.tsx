@@ -1,7 +1,13 @@
 import { RoundTicket } from "@/components/RoundTicket";
 import { signOut, useAuth } from "@/lib/auth";
 import { useActiveCashier } from "@/lib/cashier";
-import { type LiveStatus, type NewOrderEvent, subscribeToOrderInserts } from "@/lib/adminRealtime";
+import {
+  type LiveStatus,
+  type NewOrderEvent,
+  type NewReservationEvent,
+  subscribeToOrderInserts,
+  subscribeToReservationInserts,
+} from "@/lib/adminRealtime";
 import { useBusinessSettings } from "@/lib/businessSettings";
 import {
   composeOrderTicketNotes,
@@ -13,8 +19,9 @@ import {
 } from "@/lib/orderTickets";
 import { computeVatSplit, round2 } from "@/lib/orderTotals";
 import { supabase } from "@/lib/supabase";
+import { getTable, TABLES } from "@/lib/tables";
 import logo from "@/assets/logo.png";
-import { BarChart3, Bell, BookOpen, Calculator, CalendarCheck, History, LayoutDashboard, LayoutGrid, ListOrdered, LogOut, Package, Settings, Tag, Volume2, VolumeX, Wifi, WifiOff, X } from "lucide-react";
+import { BarChart3, Bell, BookOpen, Calculator, CalendarCheck, Check, History, LayoutDashboard, LayoutGrid, ListOrdered, LogOut, Package, Settings, Tag, Volume2, VolumeX, Wifi, WifiOff, X } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
@@ -94,6 +101,22 @@ function currencyPhp(value: number): string {
   })}`;
 }
 
+function formatReservationDate(value: string): string {
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-PH", {
+    timeZone: "Asia/Manila",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatReservationTime(value: string): string {
+  const [hour, minute] = value.split(":");
+  const date = new Date();
+  date.setHours(Number(hour), Number(minute), 0, 0);
+  return date.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+}
+
 export function AdminLayout({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
   const { session, role } = useAuth();
@@ -110,11 +133,21 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const [onlineTicketError, setOnlineTicketError] = useState<string | null>(null);
   const [takeoutChargeInput, setTakeoutChargeInput] = useState("");
   const [savingTakeoutCharge, setSavingTakeoutCharge] = useState(false);
+  const [reservationQueue, setReservationQueue] = useState<NewReservationEvent[]>([]);
+  const [reservationAssignTableId, setReservationAssignTableId] = useState("");
+  const [reservationActionError, setReservationActionError] = useState<string | null>(null);
+  const [savingReservation, setSavingReservation] = useState(false);
   const onlineOrderModal = onlineOrderQueue[0] ?? null;
+  const reservationModal = reservationQueue[0] ?? null;
 
   useEffect(() => {
     setTakeoutChargeInput(onlineOrderModal ? String(onlineOrderModal.takeout_charge ?? "") : "");
   }, [onlineOrderModal?.id]);
+
+  useEffect(() => {
+    setReservationAssignTableId(reservationModal?.preferred_table_id ?? "");
+    setReservationActionError(null);
+  }, [reservationModal?.id]);
 
   const navItems = useMemo(() => {
     const all = [
@@ -175,6 +208,63 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     );
     return () => unsubscribe();
   }, [soundEnabled]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToReservationInserts((reservation) => {
+      setReservationQueue((current) => {
+        if (current.some((item) => item.id === reservation.id)) return current;
+        return [...current, reservation];
+      });
+      if (soundEnabled) {
+        try {
+          playAlertTone();
+        } catch {
+          // ignore browser audio restrictions
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [soundEnabled]);
+
+  async function handleConfirmReservation(reservation: NewReservationEvent) {
+    if (!reservationAssignTableId) {
+      setReservationActionError("Choose a table to assign before confirming.");
+      return;
+    }
+    setSavingReservation(true);
+    setReservationActionError(null);
+    const { error } = await supabase
+      .from("table_reservations")
+      .update({
+        status: "confirmed",
+        assigned_table_id: reservationAssignTableId,
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq("id", reservation.id);
+    setSavingReservation(false);
+
+    if (error) {
+      setReservationActionError(error.message);
+      return;
+    }
+    setReservationQueue((current) => current.filter((item) => item.id !== reservation.id));
+  }
+
+  async function handleDeclineReservation(reservation: NewReservationEvent) {
+    setSavingReservation(true);
+    setReservationActionError(null);
+    const { error } = await supabase
+      .from("table_reservations")
+      .update({ status: "declined" })
+      .eq("id", reservation.id);
+    setSavingReservation(false);
+
+    if (error) {
+      setReservationActionError(error.message);
+      return;
+    }
+    setReservationQueue((current) => current.filter((item) => item.id !== reservation.id));
+  }
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -630,6 +720,85 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                 className="rounded-md bg-[#0d0f13] px-4 py-2 text-sm font-bold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reservationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f13]/70 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
+            <div className="border-b border-[#ebe9e6] px-4 py-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#ac312d]">New Reservation Request</p>
+              <h2 className="text-xl font-black text-[#0d0f13]">{reservationModal.guest_name}</h2>
+              <p className="mt-1 text-sm text-[#705d48]">
+                {formatReservationDate(reservationModal.reservation_date)} at{" "}
+                {formatReservationTime(reservationModal.reservation_time)} | {reservationModal.party_size} pax
+              </p>
+            </div>
+
+            <div className="space-y-3 px-4 py-4 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-[#705d48]">Phone</span>
+                <span className="font-semibold text-[#0d0f13]">{reservationModal.guest_phone}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-[#705d48]">Preferred Table</span>
+                <span className="font-semibold text-[#0d0f13]">
+                  {reservationModal.preferred_table_id
+                    ? `Table ${getTable(reservationModal.preferred_table_id)?.number ?? reservationModal.preferred_table_id}`
+                    : "No preference"}
+                </span>
+              </div>
+              {reservationModal.notes && (
+                <p className="rounded-md bg-[#f6f2ed] px-2.5 py-2 text-xs text-[#0d0f13]">{reservationModal.notes}</p>
+              )}
+              {reservationQueue.length > 1 && (
+                <p className="text-xs text-[#705d48]">{reservationQueue.length - 1} more waiting</p>
+              )}
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wide text-[#705d48]">Assign Table</label>
+                <select
+                  value={reservationAssignTableId}
+                  onChange={(event) => setReservationAssignTableId(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-[#d8d2cb] bg-white px-2 text-sm font-semibold text-[#0d0f13]"
+                >
+                  <option value="">Choose table...</option>
+                  {TABLES.map((table) => (
+                    <option key={table.id} value={table.id}>
+                      Table {table.number} ({table.capacity})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {reservationActionError && (
+                <p className="rounded-md border border-[#ac312d]/25 bg-[#ac312d]/10 px-3 py-2 text-sm font-semibold text-[#ac312d]">
+                  {reservationActionError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2 border-t border-[#ebe9e6] px-4 py-3">
+              <button
+                type="button"
+                onClick={() => void handleDeclineReservation(reservationModal)}
+                disabled={savingReservation}
+                className="flex-1 rounded-md border border-[#ac312d] px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#ac312d] disabled:opacity-60"
+              >
+                <X size={14} className="mr-1.5 inline" />
+                Decline
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmReservation(reservationModal)}
+                disabled={savingReservation}
+                className="flex-1 rounded-md bg-[#2d7a3e] px-4 py-2 text-sm font-bold uppercase tracking-wide text-white disabled:opacity-60"
+              >
+                <Check size={14} className="mr-1.5 inline" />
+                {savingReservation ? "Saving..." : "Confirm"}
               </button>
             </div>
           </div>

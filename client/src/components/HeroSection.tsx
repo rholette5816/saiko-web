@@ -1,9 +1,13 @@
 import logo from "@/assets/logo.png";
-import { Phone, MessageCircle, Star } from "lucide-react";
+import { CalendarCheck, Phone, Star } from "lucide-react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { OpenStatusBadge } from "./OpenStatusBadge";
+import { ReserveTableModal } from "./ReserveTableModal";
 
 export function HeroSection() {
+  const [reserveOpen, setReserveOpen] = useState(false);
+
   return (
     <section className="relative overflow-hidden bg-white">
       <div className="container grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 py-12 md:py-20 items-center">
@@ -48,14 +52,13 @@ export function HeroSection() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <a
-              href="https://m.me/saikoramenandsushi"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() => setReserveOpen(true)}
               className="flex items-center justify-center gap-2 px-6 md:px-8 py-3 md:py-4 bg-[#ac312d] text-white font-poppins font-bold rounded-lg hover:bg-[#8f2825] hover:shadow-lg transition-all duration-200 text-center uppercase tracking-wide"
             >
-              <MessageCircle size={18} /> Message Us
-            </a>
+              <CalendarCheck size={18} /> Reserve Table
+            </button>
             <a
               href="tel:09178658587"
               className="flex items-center justify-center gap-2 px-6 md:px-8 py-3 md:py-4 bg-[#0d0f13] text-white font-poppins font-bold rounded-lg hover:bg-black hover:shadow-lg transition-all duration-200 text-center uppercase tracking-wide"
@@ -75,7 +78,7 @@ export function HeroSection() {
             <OpenStatusBadge />
             <div className="flex items-center gap-2">
               <span className="text-xl">📍</span>
-              <span className="text-[#705d48]">Oton, Iloilo</span>
+              <span className="text-[#705d48]">Oton, Iloilo (near Vista Mall)</span>
             </div>
           </div>
         </div>
@@ -109,6 +112,8 @@ export function HeroSection() {
 
       {/* Bottom fade */}
       <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-b from-transparent to-[#ebe9e6]/30 pointer-events-none" />
+
+      <ReserveTableModal open={reserveOpen} onClose={() => setReserveOpen(false)} />
     </section>
   );
 }

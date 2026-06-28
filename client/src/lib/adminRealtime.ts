@@ -73,3 +73,62 @@ export function subscribeToOrderInserts(
     }
   };
 }
+
+export interface NewReservationEvent {
+  id: string;
+  guest_name: string;
+  guest_phone: string;
+  party_size: number;
+  reservation_date: string;
+  reservation_time: string;
+  preferred_table_id: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+const seenReservationIds = new Set<string>();
+const reservationListeners = new Set<(reservation: NewReservationEvent) => void>();
+
+let reservationChannelRef: ReturnType<typeof supabase.channel> | null = null;
+let reservationSubscribers = 0;
+
+function ensureReservationChannel() {
+  if (reservationChannelRef) return;
+  reservationChannelRef = supabase
+    .channel("admin-reservations-live")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "table_reservations" }, (payload) => {
+      const row = payload.new as Record<string, unknown>;
+      if (typeof row.status === "string" && row.status !== "pending") return;
+      const reservation: NewReservationEvent = {
+        id: String(row.id ?? ""),
+        guest_name: String(row.guest_name ?? ""),
+        guest_phone: String(row.guest_phone ?? ""),
+        party_size: Number(row.party_size ?? 0),
+        reservation_date: String(row.reservation_date ?? ""),
+        reservation_time: String(row.reservation_time ?? ""),
+        preferred_table_id: typeof row.preferred_table_id === "string" ? row.preferred_table_id : null,
+        notes: typeof row.notes === "string" ? row.notes : null,
+        created_at: String(row.created_at ?? new Date().toISOString()),
+      };
+      if (!reservation.id || seenReservationIds.has(reservation.id)) return;
+      seenReservationIds.add(reservation.id);
+      reservationListeners.forEach((listener) => listener(reservation));
+    })
+    .subscribe();
+}
+
+export function subscribeToReservationInserts(onReservation: (reservation: NewReservationEvent) => void): () => void {
+  reservationSubscribers += 1;
+  reservationListeners.add(onReservation);
+  ensureReservationChannel();
+
+  return () => {
+    reservationSubscribers = Math.max(0, reservationSubscribers - 1);
+    reservationListeners.delete(onReservation);
+
+    if (reservationSubscribers === 0 && reservationChannelRef) {
+      supabase.removeChannel(reservationChannelRef);
+      reservationChannelRef = null;
+    }
+  };
+}
