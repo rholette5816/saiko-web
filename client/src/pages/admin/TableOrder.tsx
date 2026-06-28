@@ -18,7 +18,8 @@ import {
   type DiscountType,
   type HolderType,
 } from "@/lib/discountAllocations";
-import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
+import { fetchMenuCategoriesCached } from "@/lib/menuCache";
+import { type MenuCategory } from "@/lib/menuItems";
 import { enqueue } from "@/lib/offlineQueue";
 import { useOnlineStatus } from "@/lib/offlineStatus";
 import { paymentMethodOptions, paymentMethodShortLabel, type PaymentMethod } from "@/lib/paymentMethods";
@@ -487,7 +488,7 @@ export default function AdminTableOrder({ tableId }: AdminTableOrderProps) {
   const [selectedSpiceLevel, setSelectedSpiceLevel] = useState(1);
 
   useEffect(() => {
-    fetchMenuCategories("admin")
+    fetchMenuCategoriesCached("admin")
       .then(setMenuData)
       .catch((menuError: Error) => setError(menuError.message));
   }, []);
