@@ -1,7 +1,12 @@
 const CACHE_NAME = "saiko-v1";
 
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(caches.open(CACHE_NAME));
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
 });
 
 async function networkFirst(request) {
