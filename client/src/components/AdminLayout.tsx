@@ -1,3 +1,4 @@
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { RoundTicket } from "@/components/RoundTicket";
 import { signOut, useAuth } from "@/lib/auth";
 import { useActiveCashier } from "@/lib/cashier";
@@ -496,6 +497,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className={`min-h-screen bg-[#ebe9e6] text-[#0d0f13] ${printingOnlineTicket ? "admin-online-ticket-printing" : ""}`}>
+      <OfflineBanner />
       <style>{`
         .admin-online-ticket-print { display: none; }
         @media print {

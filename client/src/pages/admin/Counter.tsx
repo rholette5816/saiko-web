@@ -3,7 +3,10 @@ import { CounterReceipt } from "@/components/CounterReceipt";
 import { RoundTicket } from "@/components/RoundTicket";
 import { useBusinessSettings } from "@/lib/businessSettings";
 import { useActiveCashier } from "@/lib/cashier";
-import { fetchMenuCategories, type MenuCategory } from "@/lib/menuItems";
+import { fetchMenuCategoriesCached } from "@/lib/menuCache";
+import { type MenuCategory } from "@/lib/menuItems";
+import { enqueue } from "@/lib/offlineQueue";
+import { useOnlineStatus } from "@/lib/offlineStatus";
 import { composeOrderTicketNotes, getTicketStatus, parseOrderTicketNotes } from "@/lib/orderTickets";
 import { computeVatSplit } from "@/lib/orderTotals";
 import { paymentMethodOptions, paymentMethodShortLabel, type PaymentMethod } from "@/lib/paymentMethods";
@@ -154,6 +157,7 @@ function formatTicketTime(value: Date): string {
 export default function AdminCounter() {
   const { activeCashier } = useActiveCashier();
   const { settings, loading: settingsLoading } = useBusinessSettings();
+  const isOnline = useOnlineStatus();
   const resolvedSettings = settings ?? DEFAULT_SETTINGS;
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -182,7 +186,7 @@ export default function AdminCounter() {
   const [menuData, setMenuData] = useState<MenuCategory[]>([]);
 
   useEffect(() => {
-    fetchMenuCategories("admin")
+    fetchMenuCategoriesCached("admin")
       .then(setMenuData)
       .catch((menuError: Error) => setError(menuError.message));
   }, []);
@@ -408,6 +412,7 @@ export default function AdminCounter() {
   }
 
   async function handleSubmit(serviceType: CounterServiceType) {
+    const clientRequestId = crypto.randomUUID();
     if (!orderItems.length || submitting) return;
     setServiceModalOpen(false);
     setSubmitting(true);
@@ -437,7 +442,7 @@ export default function AdminCounter() {
       return;
     }
 
-    const { data, error: rpcError } = await supabase.rpc("place_counter_order", {
+    const orderParams = {
       p_customer_name: customerName.trim(),
       p_customer_phone: customerPhone.trim(),
       p_subtotal: adjustedSubtotal,
@@ -450,6 +455,7 @@ export default function AdminCounter() {
       p_senior_pwd_name: DISCOUNT_PRESETS[discountType].requiresId ? discountHolderName.trim() : null,
       p_service_type: serviceType,
       p_takeout_charge: charge,
+      p_client_request_id: clientRequestId,
       p_items: orderItems.map((item) => ({
         item_id: item.id,
         item_name: item.name,
@@ -457,11 +463,74 @@ export default function AdminCounter() {
         quantity: item.quantity,
         line_total: item.price * item.quantity,
       })),
-    });
+    };
 
-    if (rpcError) {
-      setError(rpcError.message);
+    function finishCompletedOrder(completed: CompletedOrder) {
+      setPrintingOrder(completed);
+      setLastCompletedOrder(completed);
+      resetForm(false);
       setSubmitting(false);
+    }
+
+    function buildCompletedOrder(row: PlaceCounterOrderRow | null, orderNumber: string, orNumber: string | null): CompletedOrder {
+      return {
+        orderId: row?.order_id ?? "",
+        orderNumber,
+        orNumber,
+        items: orderItems,
+        subtotal,
+        total: finalPricing.total,
+        payment: paymentMethod,
+        received,
+        change: Math.max(0, round2(received - finalPricing.total)),
+        customer: customerName.trim() || "Walk-in",
+        notes: notes.trim(),
+        ticketNotes: notes.trim() || null,
+        createdAt: new Date(),
+        vatableSales: Number(row?.vatable_sales ?? finalPricing.vatableSales),
+        vatAmount: Number(row?.vat_amount ?? finalPricing.vatAmount),
+        vatExemptSales: Number(row?.vat_exempt_sales ?? finalPricing.vatExemptSales),
+        discountType,
+        discountPct,
+        discountAmount: Number(row?.senior_pwd_discount ?? finalPricing.discountAmount),
+        discountIdNumber: DISCOUNT_PRESETS[discountType].requiresId ? discountIdNumber.trim() : null,
+        discountHolderName: DISCOUNT_PRESETS[discountType].requiresId ? discountHolderName.trim() : null,
+        serviceType,
+        takeoutCharge: charge,
+        kitchenTicketPrintedAt: null,
+        kitchenTicketPrintCount: 0,
+        barTicketPrintedAt: null,
+        barTicketPrintCount: 0,
+      };
+    }
+
+    function queueOfflineOrder() {
+      enqueue("counter_order", orderParams);
+      const temporaryOrderNumber = `OFFLINE-${clientRequestId.slice(0, 8).toUpperCase()}`;
+      finishCompletedOrder(buildCompletedOrder(null, temporaryOrderNumber, null));
+    }
+
+    let data: unknown;
+    try {
+      if (!isOnline) {
+        queueOfflineOrder();
+        return;
+      }
+
+      const { data: rpcData, error: rpcError } = await supabase.rpc("place_counter_order", orderParams);
+      if (rpcError) {
+        if (!rpcError.code) {
+          queueOfflineOrder();
+          return;
+        }
+
+        setError(rpcError.message);
+        setSubmitting(false);
+        return;
+      }
+      data = rpcData;
+    } catch {
+      queueOfflineOrder();
       return;
     }
 
@@ -478,40 +547,7 @@ export default function AdminCounter() {
       return;
     }
 
-    const completed: CompletedOrder = {
-      orderId: row?.order_id ?? "",
-      orderNumber,
-      orNumber: row?.or_number ?? null,
-      items: orderItems,
-      subtotal,
-      total: finalPricing.total,
-      payment: paymentMethod,
-      received,
-      change: Math.max(0, round2(received - finalPricing.total)),
-      customer: customerName.trim() || "Walk-in",
-      notes: notes.trim(),
-      ticketNotes: notes.trim() || null,
-      createdAt: new Date(),
-      vatableSales: Number(row?.vatable_sales ?? finalPricing.vatableSales),
-      vatAmount: Number(row?.vat_amount ?? finalPricing.vatAmount),
-      vatExemptSales: Number(row?.vat_exempt_sales ?? finalPricing.vatExemptSales),
-      discountType,
-      discountPct,
-      discountAmount: Number(row?.senior_pwd_discount ?? finalPricing.discountAmount),
-      discountIdNumber: DISCOUNT_PRESETS[discountType].requiresId ? discountIdNumber.trim() : null,
-      discountHolderName: DISCOUNT_PRESETS[discountType].requiresId ? discountHolderName.trim() : null,
-      serviceType,
-      takeoutCharge: charge,
-      kitchenTicketPrintedAt: null,
-      kitchenTicketPrintCount: 0,
-      barTicketPrintedAt: null,
-      barTicketPrintCount: 0,
-    };
-
-    setPrintingOrder(completed);
-    setLastCompletedOrder(completed);
-    resetForm(false);
-    setSubmitting(false);
+    finishCompletedOrder(buildCompletedOrder(row, orderNumber, row?.or_number ?? null));
   }
 
   function renderOrderPanel(isMobile: boolean) {
