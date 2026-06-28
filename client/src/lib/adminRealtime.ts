@@ -114,7 +114,9 @@ function ensureReservationChannel() {
       seenReservationIds.add(reservation.id);
       reservationListeners.forEach((listener) => listener(reservation));
     })
-    .subscribe();
+    .subscribe((status, err) => {
+      console.log("[reservations channel]", status, err ?? "");
+    });
 }
 
 export function subscribeToReservationInserts(onReservation: (reservation: NewReservationEvent) => void): () => void {
