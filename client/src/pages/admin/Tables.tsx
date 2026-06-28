@@ -21,6 +21,14 @@ interface TableStatus {
   mergedWith: string[];
 }
 
+interface ReservationRow {
+  id: string;
+  guest_name: string;
+  party_size: number;
+  reservation_time: string;
+  assigned_table_id: string | null;
+}
+
 function currencyPhp(value: number): string {
   return `PHP ${Math.round(value).toLocaleString("en-PH")}`;
 }
@@ -35,9 +43,21 @@ function elapsedLabel(openedAt: string): string {
   return minutes > 0 ? `${hours} hr ${minutes} min` : `${hours} hr`;
 }
 
+function todayIso(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+}
+
+function formatReservationTime(value: string): string {
+  const [hour, minute] = value.split(":");
+  const date = new Date();
+  date.setHours(Number(hour), Number(minute), 0, 0);
+  return date.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+}
+
 export default function AdminTables() {
   const [, navigate] = useLocation();
   const [openOrders, setOpenOrders] = useState<OpenOrderRow[]>([]);
+  const [reservations, setReservations] = useState<ReservationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,16 +80,38 @@ export default function AdminTables() {
     setRefreshing(false);
   }
 
+  async function loadReservations() {
+    const { data, error: loadError } = await supabase
+      .from("table_reservations")
+      .select("id, guest_name, party_size, reservation_time, assigned_table_id")
+      .eq("status", "confirmed")
+      .eq("reservation_date", todayIso())
+      .not("assigned_table_id", "is", null)
+      .order("reservation_time", { ascending: true });
+
+    if (!loadError) {
+      setReservations((data ?? []) as ReservationRow[]);
+    }
+  }
+
   useEffect(() => {
     void loadTables();
+    void loadReservations();
     const channel = supabase
       .channel("tables-status")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: "table_number=not.is.null" }, () => {
         void loadTables();
       })
       .subscribe();
+    const reservationChannel = supabase
+      .channel("tables-reservations")
+      .on("postgres_changes", { event: "*", schema: "public", table: "table_reservations" }, () => {
+        void loadReservations();
+      })
+      .subscribe();
     return () => {
       void supabase.removeChannel(channel);
+      void supabase.removeChannel(reservationChannel);
     };
   }, []);
 
@@ -93,9 +135,20 @@ export default function AdminTables() {
     return grouped;
   }, [openOrders]);
 
+  const reservationByTable = useMemo(() => {
+    const grouped = new Map<string, ReservationRow>();
+    for (const reservation of reservations) {
+      if (!reservation.assigned_table_id) continue;
+      if (grouped.has(reservation.assigned_table_id)) continue;
+      grouped.set(reservation.assigned_table_id, reservation);
+    }
+    return grouped;
+  }, [reservations]);
+
   function handleRefresh() {
     setRefreshing(true);
     void loadTables();
+    void loadReservations();
   }
 
   return (
@@ -134,6 +187,8 @@ export default function AdminTables() {
           {TABLES.map((table) => {
             const status = statusByTable.get(table.id);
             const isOpen = Boolean(status);
+            const reservation = reservationByTable.get(table.id);
+            const badgeText = isOpen ? "Open" : reservation ? "Reserved" : "Empty";
             return (
               <button
                 key={table.id}
@@ -142,7 +197,9 @@ export default function AdminTables() {
                 className={`min-h-[136px] rounded-lg border p-3 text-left transition-colors ${
                   isOpen
                     ? "border-[#2d7a3e]/40 bg-[#2d7a3e]/10 hover:border-[#2d7a3e]"
-                    : "border-[#d8d2cb] bg-[#f6f2ed] hover:border-[#c08643]"
+                    : reservation
+                      ? "border-[#c08643]/40 bg-[#c08643]/10 hover:border-[#c08643]"
+                      : "border-[#d8d2cb] bg-[#f6f2ed] hover:border-[#c08643]"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -153,10 +210,10 @@ export default function AdminTables() {
                   </div>
                   <span
                     className={`rounded-full px-2 py-1 text-xs font-bold ${
-                      isOpen ? "bg-[#2d7a3e] text-white" : "bg-white text-[#705d48]"
+                      isOpen ? "bg-[#2d7a3e] text-white" : reservation ? "bg-[#c08643] text-white" : "bg-white text-[#705d48]"
                     }`}
                   >
-                    {isOpen ? "Open" : "Empty"}
+                    {badgeText}
                   </span>
                 </div>
                 {status && (
@@ -174,6 +231,19 @@ export default function AdminTables() {
                               .join(", ")}`}
                       </div>
                     )}
+                    {reservation && (
+                      <div className="mt-1 text-[#c08643]">
+                        Reserved {formatReservationTime(reservation.reservation_time)} ({reservation.guest_name})
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!status && reservation && (
+                  <div className="mt-3 rounded-md bg-white/80 px-2.5 py-2 text-xs font-semibold text-[#0d0f13]">
+                    Reserved | {formatReservationTime(reservation.reservation_time)}
+                    <div className="mt-0.5 text-[#705d48]">
+                      {reservation.guest_name} · Party of {reservation.party_size}
+                    </div>
                   </div>
                 )}
               </button>

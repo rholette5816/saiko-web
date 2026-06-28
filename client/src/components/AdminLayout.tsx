@@ -27,6 +27,7 @@ import { Link, useLocation } from "wouter";
 
 const SOUND_KEY = "saiko-admin-sound-enabled";
 const UNSEEN_KEY = "saiko-admin-unseen-orders";
+const UNSEEN_RESERVATIONS_KEY = "saiko-admin-unseen-reservations";
 
 function playAlertTone() {
   const AudioContextCtor =
@@ -126,6 +127,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
   const [unseenOrders, setUnseenOrders] = useState<NewOrderEvent[]>([]);
+  const [unseenReservations, setUnseenReservations] = useState<NewReservationEvent[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [onlineOrderQueue, setOnlineOrderQueue] = useState<OnlineOrderForModal[]>([]);
   const [printingOnlineTicket, setPrintingOnlineTicket] = useState<OnlineTicketPayload | null>(null);
@@ -180,11 +182,23 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         setUnseenOrders([]);
       }
     }
+    const savedUnseenReservations = localStorage.getItem(UNSEEN_RESERVATIONS_KEY);
+    if (savedUnseenReservations) {
+      try {
+        setUnseenReservations(JSON.parse(savedUnseenReservations) as NewReservationEvent[]);
+      } catch {
+        setUnseenReservations([]);
+      }
+    }
   }, []);
 
   useEffect(() => {
     localStorage.setItem(UNSEEN_KEY, JSON.stringify(unseenOrders));
   }, [unseenOrders]);
+
+  useEffect(() => {
+    localStorage.setItem(UNSEEN_RESERVATIONS_KEY, JSON.stringify(unseenReservations));
+  }, [unseenReservations]);
 
   useEffect(() => {
     const unsubscribe = subscribeToOrderInserts(
@@ -214,6 +228,10 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       setReservationQueue((current) => {
         if (current.some((item) => item.id === reservation.id)) return current;
         return [...current, reservation];
+      });
+      setUnseenReservations((prev) => {
+        if (prev.some((item) => item.id === reservation.id)) return prev;
+        return [reservation, ...prev].slice(0, 20);
       });
       if (soundEnabled) {
         try {
@@ -248,6 +266,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       return;
     }
     setReservationQueue((current) => current.filter((item) => item.id !== reservation.id));
+    setUnseenReservations((current) => current.filter((item) => item.id !== reservation.id));
   }
 
   async function handleDeclineReservation(reservation: NewReservationEvent) {
@@ -264,6 +283,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       return;
     }
     setReservationQueue((current) => current.filter((item) => item.id !== reservation.id));
+    setUnseenReservations((current) => current.filter((item) => item.id !== reservation.id));
   }
 
   async function handleLogout() {
@@ -489,9 +509,11 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                 title="Order notifications"
               >
                 <Bell size={16} />
-                {unseenOrders.length > 0 && (
+                {unseenOrders.length + unseenReservations.length > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#ac312d] text-white text-[10px] font-bold leading-[18px] text-center">
-                    {unseenOrders.length > 9 ? "9+" : unseenOrders.length}
+                    {unseenOrders.length + unseenReservations.length > 9
+                      ? "9+"
+                      : unseenOrders.length + unseenReservations.length}
                   </span>
                 )}
               </button>
@@ -529,6 +551,31 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                               <p className="text-xs text-[#705d48]">{order.customer_name ?? "New order"}</p>
                             </Link>
                           )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-2 text-xs font-semibold text-[#705d48] px-2 py-1 border-t border-[#d8d2cb] pt-2">
+                    New Reservations
+                  </p>
+                  {unseenReservations.length === 0 ? (
+                    <p className="text-xs text-[#705d48] px-2 py-2">No new reservation requests.</p>
+                  ) : (
+                    <ul className="max-h-64 overflow-y-auto space-y-1">
+                      {unseenReservations.map((reservation) => (
+                        <li key={reservation.id}>
+                          <button
+                            type="button"
+                            onClick={() => setShowNotifications(false)}
+                            className="block w-full rounded-md px-2 py-2 text-left hover:bg-[#f6f2ed]"
+                          >
+                            <p className="text-sm font-semibold text-[#0d0f13]">{reservation.guest_name}</p>
+                            <p className="text-xs text-[#705d48]">
+                              {formatReservationDate(reservation.reservation_date)} ·{" "}
+                              {formatReservationTime(reservation.reservation_time)} · Party of{" "}
+                              {reservation.party_size}
+                            </p>
+                          </button>
                         </li>
                       ))}
                     </ul>
